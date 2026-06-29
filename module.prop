@@ -1,0 +1,7 @@
+id=yay
+name=yay
+version=v1.0
+versionCode=1
+author=uruhara91
+description=System tweaks: I/O scheduler, component disable, appops, game mode. Run-on-demand, no persistent daemon.
+updateJson=
