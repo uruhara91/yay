@@ -1,0 +1,15 @@
+# CMake build directories (build.sh names these build_<abi>_<type>)
+build_*/
+build/
+
+# Build output — produced by build.sh, not source
+bin/
+
+# Packaged flashable module zips
+yay-*.zip
+
+# Editor / OS noise
+.vscode/
+.idea/
+*.swp
+.DS_Store

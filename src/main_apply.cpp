@@ -19,8 +19,13 @@ static constexpr const char* LOG_FILE    = "/data/adb/yay/run.log";
 static constexpr const char* RULES_JSON  = "/data/adb/yay/config/rules.json";
 static constexpr const char* GAME_JSON   = "/data/adb/yay/config/game_config.json";
 static constexpr const char* IO_JSON     = "/data/adb/yay/config/io_config.json";
+// Only rules.json has a hash cache. Component disable and appops overrides
+// are persistent Android-side state (survive reboot on their own), so a
+// hash guard avoids redundant binder calls when nothing changed. Game mode
+// (downscale, log cleanup) and the I/O scheduler are runtime state Android
+// resets every boot — they always re-apply unconditionally, no hash
+// involved, see apply_game_mode() in game_mode.cpp and run_io() below.
 static constexpr const char* RULES_HASH  = "/data/adb/yay/cache/rules.hash";
-static constexpr const char* GAME_HASH   = "/data/adb/yay/cache/game.hash";
 
 // ─── post-fs-data ─────────────────────────────────────────────────────────────
 // Runs before userspace is up. Minimal, fast — only resetprop.
@@ -97,8 +102,10 @@ static void run_game() {
 }
 
 // ─── boot ─────────────────────────────────────────────────────────────────────
-// Called from service.sh after boot_completed. Runs io always, rules+game
-// only if config changed since last boot (hash-guarded inside each subsystem).
+// Called from service.sh after boot_completed. Runs io and game mode
+// unconditionally every boot (Android resets both kinds of state on its
+// own), and rules only if rules.json changed since last run (hash-guarded
+// inside apply_rules — see rules_engine.cpp).
 static void run_boot() {
     Logger::info("yay: --boot");
 

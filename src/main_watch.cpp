@@ -1,6 +1,7 @@
 #include "logger.h"
 #include "exec_util.h"
 
+#include <array>
 #include <cerrno>
 #include <cstring>
 #include <string>
@@ -31,6 +32,8 @@ static const FileMode MAPPINGS[] = {
     {"io_config.json",   "--io"},
 };
 
+constexpr size_t kModeCount = sizeof(MAPPINGS) / sizeof(MAPPINGS[0]);
+
 static void spawn_apply(const char* mode) {
     Logger::info(std::string("yay_watch: spawning yay_apply ") + mode);
 
@@ -51,6 +54,30 @@ static void spawn_apply(const char* mode) {
     int code = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
     Logger::info(std::string("yay_watch: yay_apply ") + mode +
                  " exit=" + std::to_string(code));
+}
+
+// Scan one inotify read buffer for events matching a known config filename.
+// Marks every match in `triggered` (does NOT stop at the first one) — a
+// single editor save batch, or a sync tool touching multiple files close
+// together, can legitimately produce events for more than one of
+// rules.json / game_config.json / io_config.json in the same read().
+// Returns true if at least one new mode was newly marked.
+static bool scan_events(const char* buf, ssize_t len, std::array<bool, kModeCount>& triggered) {
+    bool any_new = false;
+    const char* ptr = buf;
+    while (ptr < buf + len) {
+        auto* ev = reinterpret_cast<const struct inotify_event*>(ptr);
+        ptr += sizeof(struct inotify_event) + ev->len;
+        if (ev->len == 0) continue;
+
+        for (size_t i = 0; i < kModeCount; ++i) {
+            if (strcmp(ev->name, MAPPINGS[i].name) == 0) {
+                if (!triggered[i]) any_new = true;
+                triggered[i] = true;
+            }
+        }
+    }
+    return any_new;
 }
 
 int main(int /*argc*/, char* /*argv*/[]) {
@@ -95,36 +122,34 @@ int main(int /*argc*/, char* /*argv*/[]) {
         ssize_t len = read(ifd, buf, sizeof(buf));
         if (len <= 0) continue;
 
-        // Scan events for a known filename
-        const char* triggered_mode = nullptr;
-        const char* ptr = buf;
-        while (ptr < buf + len) {
-            auto* ev = reinterpret_cast<const struct inotify_event*>(ptr);
-            ptr += sizeof(struct inotify_event) + ev->len;
-            if (ev->len == 0) continue;
+        std::array<bool, kModeCount> triggered{};
+        scan_events(buf, len, triggered);
 
-            for (auto& m : MAPPINGS) {
-                if (strcmp(ev->name, m.name) == 0) {
-                    triggered_mode = m.mode;
-                    break;
-                }
-            }
-            if (triggered_mode) break;
-        }
+        bool any_triggered = false;
+        for (bool t : triggered) any_triggered |= t;
+        if (!any_triggered) continue;
 
-        if (!triggered_mode) continue;
-
-        // Debounce: drain further events until quiet for DEBOUNCE_MS
-        // Handles editors that write multiple events per save
+        // Debounce: drain further events until quiet for DEBOUNCE_MS.
+        // Handles editors that write multiple events per save, and keeps
+        // scanning the drained events too — a file that changes again
+        // during the debounce window, or a second config file that only
+        // changes a moment later (e.g. a sync tool touching files one at
+        // a time), still gets picked up instead of silently missed.
         Logger::debug("yay_watch: change detected, debouncing...");
         while (true) {
             int d = poll(&pfd, 1, DEBOUNCE_MS);
             if (d <= 0) break;
-            const auto drained = read(ifd, buf, sizeof(buf)); // drain, discard
-            static_cast<void>(drained);
+            const auto drained = read(ifd, buf, sizeof(buf));
+            if (drained > 0) {
+                scan_events(buf, drained, triggered);
+            }
         }
 
-        spawn_apply(triggered_mode);
+        for (size_t i = 0; i < kModeCount; ++i) {
+            if (triggered[i]) {
+                spawn_apply(MAPPINGS[i].mode);
+            }
+        }
     }
 
     Logger::info("yay_watch: stopping");

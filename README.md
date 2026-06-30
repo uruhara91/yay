@@ -17,7 +17,14 @@ No persistent daemon. Binary runs, does its job, exits.
 | rules.json changed | `yay_apply --rules` | inotify watcher (opt-in) |
 | game_config.json changed | `yay_apply --game` | inotify watcher (opt-in) |
 
-Hash caching: `--rules` and `--game` are skipped at boot if config hasn't changed since last run.
+Hash caching: `--rules` is skipped at boot if `rules.json` hasn't changed
+since last run — component disable and appops mode overrides are persistent
+Android-side state (they survive reboot on their own), so re-applying them
+when nothing changed would just be redundant binder calls. `--game` and
+`--io` are **not** hash-guarded and always run in full on every invocation:
+downscale, log cleanup, the I/O scheduler, and TCP congestion control are
+all runtime state that Android itself resets every boot, so they need to be
+re-applied regardless of whether their config changed.
 
 ---
 
@@ -34,6 +41,13 @@ Hash caching: `--rules` and `--game` are skipped at boot if config hasn't change
 - Appops: per-package op overrides (see `config/rules.json`)
 - Game mode: per-package resolution downscale via Android GameManager API
 - fstrim: deferred 60s after boot
+
+Component disable and appops calls each require one `cmd` invocation per
+entry (Android's `pm`/`appops` shell commands don't support a batch form),
+but they run with bounded concurrency (several at once, not strictly
+one-at-a-time) and a per-item timeout, so a large `rules.json` doesn't turn
+into a long serial wait — see `exec_batch()` in `src/exec_util.h` for the
+exact mechanism and tunables.
 
 ---
 
@@ -53,7 +67,12 @@ export ANDROID_NDK_HOME=~/Android/Sdk/ndk/26.x.x
 # yay_watch  — optional inotify watcher
 ```
 
-Targets API 31, ABI arm64-v8a, C++17, static libstdc++.
+Targets API 31, ABI arm64-v8a, C++20, static libc++ (NDK's `c++_static`).
+
+nlohmann/json is pulled automatically via CMake `FetchContent` (pinned to a
+tagged release) during configure — no manual vendoring step, and no
+internet access needed beyond what `cmake -B` itself does on first
+configure (cached afterward in the build directory).
 
 ---
 
@@ -160,8 +179,7 @@ adb logcat -s yay       — real-time (tag: yay / yay_watch)
 │   ├── game_config.json
 │   └── io_config.json
 ├── cache/
-│   ├── rules.hash      ← hash of last applied rules.json
-│   └── game.hash       ← hash of last applied game_config.json
+│   └── rules.hash      ← hash of last applied rules.json (rules.json only — see Hash caching above)
 └── run.log
 ```
 
@@ -181,7 +199,7 @@ yay/
 │   ├── rules.json
 │   ├── game_config.json
 │   └── io_config.json
-├── src/                ← C++17 source (not shipped in module zip)
+├── src/                ← C++20 source (not shipped in module zip)
 ├── CMakeLists.txt
 ├── build.sh
 ├── customize.sh

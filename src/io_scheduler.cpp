@@ -6,6 +6,75 @@
 #include <cstring>
 #include <vector>
 
+namespace {
+
+// RAII wrapper for DIR* — same rationale as the FileDescriptor wrappers in
+// exec_util.cpp / hash_util.cpp / logger.cpp / json_config.cpp: without it,
+// an exception thrown mid-loop (e.g. std::string allocation failure) would
+// leak the directory handle since the original code only closedir()'d on
+// the normal fall-through path.
+class DirHandle {
+public:
+    explicit DirHandle(DIR* dir = nullptr) noexcept
+        : dir_(dir)
+    {
+    }
+
+    DirHandle(const DirHandle&) = delete;
+    DirHandle& operator=(const DirHandle&) = delete;
+
+    DirHandle(DirHandle&& other) noexcept
+        : dir_(other.release())
+    {
+    }
+
+    DirHandle& operator=(DirHandle&& other) noexcept
+    {
+        if (this != &other) {
+            reset(other.release());
+        }
+        return *this;
+    }
+
+    ~DirHandle() noexcept
+    {
+        reset();
+    }
+
+    [[nodiscard]]
+    DIR* get() const noexcept
+    {
+        return dir_;
+    }
+
+    [[nodiscard]]
+    bool valid() const noexcept
+    {
+        return dir_ != nullptr;
+    }
+
+    [[nodiscard]]
+    DIR* release() noexcept
+    {
+        DIR* d = dir_;
+        dir_ = nullptr;
+        return d;
+    }
+
+    void reset(DIR* dir = nullptr) noexcept
+    {
+        if (dir_ != nullptr) {
+            ::closedir(dir_);
+        }
+        dir_ = dir;
+    }
+
+private:
+    DIR* dir_;
+};
+
+} // namespace
+
 static bool try_write_scheduler(const std::string& qdir, const std::string& sched) {
     std::string sched_path = qdir + "/scheduler";
     std::string available  = sysfs_read(sched_path.c_str());
@@ -30,14 +99,14 @@ IOResult apply_io_scheduler(const Json& cfg) {
     if (cfg.contains("read_ahead_kb") && cfg["read_ahead_kb"].is_number_integer())
         read_ahead = std::to_string(cfg["read_ahead_kb"].get<int>());
 
-    DIR* dir = opendir("/sys/block");
-    if (!dir) {
+    DirHandle dir(opendir("/sys/block"));
+    if (!dir.valid()) {
         Logger::err("io_scheduler: cannot open /sys/block");
         return res;
     }
 
     struct dirent* entry;
-    while ((entry = readdir(dir)) != nullptr) {
+    while ((entry = readdir(dir.get())) != nullptr) {
         if (entry->d_name[0] == '.') continue;
 
         std::string dev  = entry->d_name;
@@ -85,7 +154,6 @@ IOResult apply_io_scheduler(const Json& cfg) {
         if (!read_ahead.empty())
             static_cast<void>(sysfs_write(qdir + "/read_ahead_kb", read_ahead));
     }
-    closedir(dir);
 
     Logger::info("io_scheduler: configured=" + std::to_string(res.configured) +
                  " skipped="    + std::to_string(res.skipped)    +

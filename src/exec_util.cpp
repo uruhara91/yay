@@ -2,6 +2,7 @@
 
 #include "logger.h"
 
+#include <algorithm>
 #include <array>
 #include <cerrno>
 #include <csignal>
@@ -152,6 +153,82 @@ int wait_for_child(pid_t pid) noexcept
     return -1;
 }
 
+// Non-blocking waitpid: returns true if the child has already exited
+// (exit_code populated), false if it's still running. Does not block.
+[[nodiscard]]
+bool try_reap(pid_t pid, int& exit_code) noexcept
+{
+    int status = 0;
+    const pid_t ret = ::waitpid(pid, &status, WNOHANG);
+    if (ret == 0) {
+        return false; // still running
+    }
+    if (ret < 0) {
+        // ECHILD etc — treat as gone so we don't spin forever on it.
+        exit_code = -1;
+        return true;
+    }
+
+    exit_code = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+    return true;
+}
+
+// One in-flight child spawned for exec_batch.
+struct BatchChild {
+    pid_t pid = -1;
+    FileDescriptor read_fd;
+    std::chrono::steady_clock::time_point deadline {};
+    size_t result_index = 0;
+    bool started = false; // false until actually forked (budget may skip it)
+};
+
+// Fork+exec a single command, non-blocking — caller owns the returned fd.
+// Returns pid < 0 on failure (fork/pipe2 error); caller should treat the
+// corresponding result as a failure without killing the whole batch.
+[[nodiscard]]
+pid_t spawn_one(
+    const std::vector<std::string>& argv_owned,
+    FileDescriptor& out_read_fd) noexcept
+{
+    if (argv_owned.empty()) {
+        return -1;
+    }
+
+    std::array<int, 2U> pipefd {-1, -1};
+    if (::pipe2(pipefd.data(), O_CLOEXEC) < 0) {
+        Logger::err("exec_util: pipe2 failed (batch)");
+        return -1;
+    }
+
+    FileDescriptor read_fd(pipefd[0]);
+    FileDescriptor write_fd(pipefd[1]);
+
+    // execvp mutates neither argv contents nor the owning strings here, but
+    // make_argv() needs a non-const vector<string>& to fill char* pointers
+    // into existing storage — copy once per spawn, owned by the child setup.
+    std::vector<std::string> owned_copy = argv_owned;
+    auto raw_args = make_argv(owned_copy);
+
+    const pid_t pid = ::fork();
+    if (pid < 0) {
+        Logger::err("exec_util: fork failed (batch)");
+        return -1;
+    }
+
+    if (pid == 0) {
+        static_cast<void>(::dup2(write_fd.get(), STDOUT_FILENO));
+        static_cast<void>(::dup2(write_fd.get(), STDERR_FILENO));
+        read_fd.reset();
+        write_fd.reset();
+        ::execvp(raw_args[0], raw_args.data());
+        _exit(127);
+    }
+
+    write_fd.reset();
+    out_read_fd = std::move(read_fd);
+    return pid;
+}
+
 } // namespace
 
 ExecResult exec_cmd(
@@ -261,6 +338,181 @@ ExecResult exec_cmd(
     return exec_cmd(
         std::span<const std::string_view>(argv.begin(), argv.size()),
         std::chrono::seconds(timeout_sec));
+}
+
+std::vector<ExecResult> exec_batch(
+    std::span<const std::vector<std::string>> commands,
+    size_t max_concurrent,
+    std::chrono::seconds item_timeout,
+    std::chrono::seconds total_budget) noexcept
+{
+    std::vector<ExecResult> results(commands.size());
+    if (commands.empty()) {
+        return results;
+    }
+
+    try {
+        const auto batch_deadline =
+            std::chrono::steady_clock::now() + total_budget;
+        const size_t concurrency =
+            std::max<size_t>(1U, std::min(max_concurrent, commands.size()));
+
+        std::vector<BatchChild> in_flight;
+        in_flight.reserve(concurrency);
+
+        size_t next_to_start = 0U;
+        bool budget_exceeded = false;
+
+        // Launch the initial wave up to `concurrency`.
+        auto try_start_next = [&]() noexcept {
+            while (in_flight.size() < concurrency &&
+                   next_to_start < commands.size()) {
+                if (std::chrono::steady_clock::now() >= batch_deadline) {
+                    budget_exceeded = true;
+                    return;
+                }
+
+                BatchChild child;
+                child.result_index = next_to_start;
+                child.pid = spawn_one(commands[next_to_start], child.read_fd);
+                child.deadline =
+                    std::chrono::steady_clock::now() + item_timeout;
+
+                if (child.pid < 0) {
+                    // Spawn failed outright — record failure now, don't
+                    // occupy a concurrency slot for it.
+                    results[next_to_start] = ExecResult{-1, {}};
+                    ++next_to_start;
+                    continue;
+                }
+
+                child.started = true;
+                in_flight.push_back(std::move(child));
+                ++next_to_start;
+            }
+        };
+
+        try_start_next();
+
+        while (!in_flight.empty()) {
+            if (std::chrono::steady_clock::now() >= batch_deadline) {
+                budget_exceeded = true;
+                break;
+            }
+
+            std::vector<struct pollfd> pfds;
+            pfds.reserve(in_flight.size());
+            for (auto& child : in_flight) {
+                pfds.push_back(
+                    {child.read_fd.get(), POLLIN, 0});
+            }
+
+            const int ret = ::poll(
+                pfds.data(),
+                static_cast<nfds_t>(pfds.size()),
+                static_cast<int>(kPollInterval.count()));
+
+            if (ret < 0 && errno != EINTR) {
+                Logger::err("exec_util: batch poll error");
+                break;
+            }
+
+            std::array<char, kReadBufferSize> buffer {};
+
+            // Drain any fds that are ready.
+            if (ret > 0) {
+                for (size_t i = 0U; i < in_flight.size(); ++i) {
+                    const auto& revents = pfds[i].revents;
+                    if ((revents & (POLLIN | POLLHUP)) == 0 &&
+                        (revents & (POLLERR | POLLNVAL)) == 0) {
+                        continue;
+                    }
+
+                    auto& child = in_flight[i];
+                    if ((revents & POLLIN) != 0) {
+                        const auto n = ::read(
+                            child.read_fd.get(),
+                            buffer.data(),
+                            buffer.size());
+                        if (n > 0) {
+                            results[child.result_index].stdout_str.append(
+                                buffer.data(),
+                                static_cast<size_t>(n));
+                        }
+                    }
+                }
+            }
+
+            // Reap anything that has exited or blown its per-item deadline,
+            // independent of poll readiness — a child can exit with no
+            // further output (POLLHUP without POLLIN already handled above,
+            // but WNOHANG here is the authoritative exit check).
+            const auto now = std::chrono::steady_clock::now();
+            std::vector<BatchChild> still_running;
+            still_running.reserve(in_flight.size());
+
+            for (auto& child : in_flight) {
+                int exit_code = -1;
+                if (try_reap(child.pid, exit_code)) {
+                    // Drain any final buffered bytes before closing.
+                    while (true) {
+                        const auto n = ::read(
+                            child.read_fd.get(),
+                            buffer.data(),
+                            buffer.size());
+                        if (n <= 0) {
+                            break;
+                        }
+                        results[child.result_index].stdout_str.append(
+                            buffer.data(),
+                            static_cast<size_t>(n));
+                    }
+                    results[child.result_index].exit_code = exit_code;
+                    continue; // child.read_fd closes via destructor below
+                }
+
+                if (now >= child.deadline) {
+                    Logger::warn("exec_util: batch item timeout, killing pid");
+                    static_cast<void>(::kill(child.pid, SIGKILL));
+                    static_cast<void>(wait_for_child(child.pid));
+                    results[child.result_index] = ExecResult{-1, {}};
+                    continue;
+                }
+
+                still_running.push_back(std::move(child));
+            }
+
+            in_flight = std::move(still_running);
+
+            try_start_next();
+            if (budget_exceeded) {
+                break;
+            }
+        }
+
+        if (budget_exceeded) {
+            Logger::err(
+                "exec_util: batch total budget exceeded — killing " +
+                std::to_string(in_flight.size()) +
+                " in-flight, skipping " +
+                std::to_string(commands.size() - next_to_start) +
+                " unstarted");
+
+            for (auto& child : in_flight) {
+                static_cast<void>(::kill(child.pid, SIGKILL));
+                static_cast<void>(wait_for_child(child.pid));
+                results[child.result_index] = ExecResult{-1, {}};
+            }
+            for (size_t i = next_to_start; i < commands.size(); ++i) {
+                results[i] = ExecResult{-1, {}};
+            }
+        }
+
+        return results;
+    } catch (...) {
+        Logger::err("exec_util: exception in batch — returning partial results");
+        return results;
+    }
 }
 
 bool sysfs_write(std::string_view path, std::string_view value) noexcept

@@ -34,16 +34,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="$SCRIPT_DIR/build_${ABI}_${BUILD_TYPE}"
 OUT_DIR="$SCRIPT_DIR/bin"
 
-# ─── Vendor headers (download if missing) ────────────────────────────────────
-VENDOR_DIR="$SCRIPT_DIR/src/vendor"
-mkdir -p "$VENDOR_DIR"
-
-if [ ! -f "$VENDOR_DIR/json.hpp" ]; then
-    echo "Downloading nlohmann/json..."
-    JSON_URL="https://raw.githubusercontent.com/nlohmann/json/develop/single_include/nlohmann/json.hpp"
-    curl -sSfL "$JSON_URL" -o "$VENDOR_DIR/json.hpp"
-    echo "  -> json.hpp OK ($(wc -l < "$VENDOR_DIR/json.hpp") lines)"
-fi
+# nlohmann/json is fetched automatically by CMake (FetchContent, pinned to
+# a tagged release — see CMakeLists.txt) during the configure step below.
+# No manual download needed here anymore.
 
 # ─── CMake configure ─────────────────────────────────────────────────────────
 CMAKE_BUILD_TYPE="Release"

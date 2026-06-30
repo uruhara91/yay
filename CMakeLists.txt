@@ -32,12 +32,40 @@ if(IPO_SUPPORTED)
 endif()
 
 #
+# Dependencies
+#
+
+# nlohmann/json — pulled via FetchContent so `cmake --build` is fully
+# self-contained regardless of how it's invoked (build.sh, a CI workflow
+# calling cmake directly, an IDE, etc). Previously this lived in
+# src/vendor/json.hpp, downloaded by a curl step inside build.sh — that
+# worked but meant the build silently depended on build.sh always running
+# first; anything that called cmake directly (e.g. a CI step that skips
+# build.sh) would fail with a missing header. FetchContent makes the
+# dependency a normal part of the CMake graph instead of an out-of-band
+# shell step, and pins to an exact tagged release rather than `develop`
+# (which has no compatibility/versioning guarantees and can change under
+# us at any time).
+include(FetchContent)
+
+set(JSON_BuildTests OFF CACHE INTERNAL "")
+set(JSON_Install OFF CACHE INTERNAL "")
+
+FetchContent_Declare(
+    nlohmann_json
+    GIT_REPOSITORY https://github.com/nlohmann/json.git
+    GIT_TAG v3.12.0
+    GIT_SHALLOW TRUE
+)
+
+FetchContent_MakeAvailable(nlohmann_json)
+
+#
 # Sources
 #
 
 include_directories(
     src
-    src/vendor
 )
 
 set(COMMON_SOURCES
@@ -126,6 +154,7 @@ foreach(target
     target_link_libraries(${target}
         PRIVATE
             log
+            nlohmann_json::nlohmann_json
     )
 
 endforeach()

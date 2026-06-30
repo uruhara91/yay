@@ -10,13 +10,28 @@
 // instead of a local fopen/fprintf helper, so a power-cycle mid-write can't
 // leave a corrupt/truncated hash file that would falsely skip a future apply.
 
-// Batch component disable: build one pm command per package to minimize fork()s.
-// Instead of 1 fork per component (100+ forks), we do 1 fork per package.
-// "cmd package disable pkg/comp1 pkg/comp2 ..." is NOT supported by Android pm.
-// Minimum granularity is one component per call — so we parallelize per-package
-// by grouping them, and log failures without aborting the rest.
+// "cmd package disable pkg/comp1 pkg/comp2 ..." is NOT supported by Android
+// pm — runDisable()/runEnable() in PackageManagerShellCommand take a single
+// PACKAGE_OR_COMPONENT positional argument, no batch form. One component is
+// still one process, but instead of running them strictly one-at-a-time we
+// fire them through exec_batch with bounded concurrency: `cmd package` is
+// IPC/IO-bound (binder call into system_server), so overlapping several at
+// once is a real wall-clock win, not just busywork. Both the per-item
+// timeout and the overall batch budget come from exec_batch's safe
+// defaults (see exec_util.h) — they exist as a dead-man's switch for a
+// wedged device, not because this path is expected to run often: it's only
+// reached on install (--full) or when rules.json actually changes
+// (hash-guarded below), never on a no-op boot.
 static void apply_components(const Json& cfg, RulesResult& res) {
     if (!cfg.contains("components") || !cfg["components"].is_array()) return;
+
+    struct Entry {
+        std::string target;     // "pkg/component", for logging
+        std::string cmd_action; // "enable" or "disable"
+    };
+
+    std::vector<Entry> entries;
+    std::vector<std::vector<std::string>> commands;
 
     for (auto& entry : cfg["components"]) {
         if (!entry.value("enabled", true)) continue;
@@ -27,24 +42,44 @@ static void apply_components(const Json& cfg, RulesResult& res) {
 
         if (pkg.empty() || comp.empty()) continue;
 
-        std::string target = pkg + "/" + comp;
         std::string cmd_action = (act == "enable") ? "enable" : "disable";
+        entries.push_back({pkg + "/" + comp, cmd_action});
+        commands.push_back({"cmd", "package", cmd_action, pkg + "/" + comp});
+    }
 
-        auto r = exec_cmd({"cmd", "package", cmd_action, target});
+    if (commands.empty()) return;
+
+    auto results = exec_batch(commands);
+
+    for (size_t i = 0; i < results.size(); ++i) {
+        const auto& r = results[i];
+        const auto& e = entries[i];
+
         // Android returns exit 0 and prints "new state: disabled" or similar
         // even if already disabled — treat both as success
         bool ok = r.ok() || r.stdout_str.find("new state") != std::string::npos;
         if (ok) {
             res.components_ok++;
         } else {
-            Logger::warn("rules: " + cmd_action + " failed: " + target);
+            Logger::warn("rules: " + e.cmd_action + " failed: " + e.target);
             res.failed++;
         }
     }
 }
 
+// Same batching rationale as apply_components — `cmd appops set` is one
+// package+op per call, no batch form, fired through exec_batch for bounded
+// concurrency instead of a strictly sequential fork loop.
 static void apply_appops(const Json& cfg, RulesResult& res) {
     if (!cfg.contains("appops") || !cfg["appops"].is_array()) return;
+
+    struct Entry {
+        std::string pkg;
+        std::string op;
+    };
+
+    std::vector<Entry> entries;
+    std::vector<std::vector<std::string>> commands;
 
     for (auto& entry : cfg["appops"]) {
         if (!entry.value("enabled", true)) continue;
@@ -60,11 +95,22 @@ static void apply_appops(const Json& cfg, RulesResult& res) {
             op = entry["op"].get<std::string>();
         else continue;
 
-        auto r = exec_cmd({"cmd", "appops", "set", pkg, op, mode});
+        entries.push_back({pkg, op});
+        commands.push_back({"cmd", "appops", "set", pkg, op, mode});
+    }
+
+    if (commands.empty()) return;
+
+    auto results = exec_batch(commands);
+
+    for (size_t i = 0; i < results.size(); ++i) {
+        const auto& r = results[i];
+        const auto& e = entries[i];
+
         if (r.ok()) {
             res.appops_ok++;
         } else {
-            Logger::warn("rules: appops failed: " + pkg + " op=" + op);
+            Logger::warn("rules: appops failed: " + e.pkg + " op=" + e.op);
             res.failed++;
         }
     }
@@ -100,6 +146,14 @@ RulesResult apply_rules(
             }
         }
 
+        // Note: this hash guard covers components + appops together — both
+        // are persistent Android-side state (PackageManager's
+        // enabled/disabled flag, and appops mode overrides) that survive
+        // reboot on their own, so re-applying when rules.json hasn't
+        // changed would just be redundant binder calls. This is distinct
+        // from game_mode's downscale/log-cleanup, which Android resets
+        // every boot and therefore always re-applies regardless of hash —
+        // see apply_game_mode in game_mode.cpp.
         Logger::info("rules: applying...");
         apply_components(cfg, res);
         apply_appops(cfg, res);
