@@ -82,7 +82,7 @@ static void run_rules(bool force) {
         return;
     }
     (*cfg)["_source_path"] = RULES_JSON;
-    apply_rules(*cfg, RULES_HASH, force);
+    static_cast<void>(apply_rules(*cfg, RULES_HASH, force));
 }
 
 // ─── game ─────────────────────────────────────────────────────────────────────

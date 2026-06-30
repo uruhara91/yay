@@ -3,6 +3,7 @@
 #include "hash_util.h"
 #include "logger.h"
 #include <string>
+#include <string_view>
 #include <vector>
 
 // Hash cache I/O delegated entirely to hashutil — atomic write (fsync + rename)
@@ -69,43 +70,52 @@ static void apply_appops(const Json& cfg, RulesResult& res) {
     }
 }
 
-RulesResult apply_rules(const Json& cfg, const char* hash_cache_path, bool force) {
+RulesResult apply_rules(
+    const Json& cfg,
+    std::string_view hash_cache_path,
+    bool force) noexcept
+{
     RulesResult res;
 
-    // Require explicit source path — avoids ambiguous fallback behaviour
-    if (!cfg.contains("_source_path") || !cfg["_source_path"].is_string()) {
-        Logger::err("rules: _source_path missing — cannot hash, aborting");
-        return res;
-    }
-
-    std::string src_path = cfg["_source_path"].get<std::string>();
-    const auto current_hash = hashutil::hash_file(src_path);
-
-    if (!current_hash) {
-        Logger::err("rules: cannot hash " + src_path + " — file missing or unreadable");
-        return res;
-    }
-
-    if (!force) {
-        const auto saved = hashutil::read_hash_cache(hash_cache_path);
-        if (saved && *saved == *current_hash) {
-            Logger::info("rules: unchanged, skipping");
+    try {
+        // Require explicit source path — avoids ambiguous fallback behaviour
+        if (!cfg.contains("_source_path") || !cfg["_source_path"].is_string()) {
+            Logger::err("rules: _source_path missing — cannot hash, aborting");
             return res;
         }
+
+        std::string src_path = cfg["_source_path"].get<std::string>();
+        const auto current_hash = hashutil::hash_file(src_path);
+
+        if (!current_hash) {
+            Logger::err("rules: cannot hash " + src_path + " — file missing or unreadable");
+            return res;
+        }
+
+        if (!force) {
+            const auto saved = hashutil::read_hash_cache(hash_cache_path);
+            if (saved && *saved == *current_hash) {
+                Logger::info("rules: unchanged, skipping");
+                return res;
+            }
+        }
+
+        Logger::info("rules: applying...");
+        apply_components(cfg, res);
+        apply_appops(cfg, res);
+
+        // Save hash after full pass — even partial success is recorded
+        // so next boot skips if config still same. Atomic: tmp write + fsync + rename.
+        if (!hashutil::write_hash_cache_atomic(hash_cache_path, *current_hash)) {
+            Logger::warn("rules: failed to persist hash cache — next boot will re-apply");
+        }
+
+        Logger::info("rules: done — components=" + std::to_string(res.components_ok) +
+                     " appops=" + std::to_string(res.appops_ok) +
+                     " failed=" + std::to_string(res.failed));
+        return res;
+    } catch (...) {
+        Logger::err("rules: unexpected exception during apply — aborting this pass");
+        return res;
     }
-
-    Logger::info("rules: applying...");
-    apply_components(cfg, res);
-    apply_appops(cfg, res);
-
-    // Save hash after full pass — even partial success is recorded
-    // so next boot skips if config still same. Atomic: tmp write + fsync + rename.
-    if (!hashutil::write_hash_cache_atomic(hash_cache_path, *current_hash)) {
-        Logger::warn("rules: failed to persist hash cache — next boot will re-apply");
-    }
-
-    Logger::info("rules: done — components=" + std::to_string(res.components_ok) +
-                 " appops=" + std::to_string(res.appops_ok) +
-                 " failed=" + std::to_string(res.failed));
-    return res;
 }
