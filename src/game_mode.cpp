@@ -208,13 +208,19 @@ GameResult apply_game_mode(const Json& cfg) {
             double factor = game["downscale"].get<double>();
             if (factor > 0.0 && factor <= 1.0) {
                 char fs[16];
-                snprintf(fs, sizeof(fs), "%.2f", factor);
+                snprintf(fs, sizeof(fs), "%g", factor);
+                if (fs[0] == '\0' || strchr(fs, 'e') != nullptr || strchr(fs, 'E') != nullptr) {
+                    Logger::warn("game_mode: skipping downscale for " + pkg +
+                                 " — could not format factor as plain decimal");
+                    res.failed++;
+                    continue;
+                }
+        
                 auto r = exec_cmd({"cmd", "game", "downscale", fs, pkg});
                 if (r.ok()) {
                     Logger::info("game_mode: " + pkg + " downscale=" + fs);
                     res.downscale_set++;
                 } else {
-                    // Trim trailing whitespace from stdout for a clean log line.
                     std::string out = r.stdout_str;
                     while (!out.empty() &&
                            (out.back() == '\n' || out.back() == '\r' ||
