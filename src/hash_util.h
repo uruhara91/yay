@@ -1,9 +1,19 @@
 #pragma once
+
+#include <optional>
+#include <span>
 #include <string>
+#include <string_view>
 
-// Returns hex MD5 of a file's contents, or "" on error.
-// Used to detect config changes without re-reading the full file.
-std::string hash_file(const char* path);
+namespace hashutil {
 
-// Returns combined hash of multiple files (joined, then hashed).
-std::string hash_files(const char* const* paths, int count);
+using Hash = std::string;
+
+[[nodiscard]]
+std::optional<Hash> hash_file(std::string_view path) noexcept;
+
+[[nodiscard]]
+std::optional<Hash> hash_files(
+    std::span<const std::string_view> paths) noexcept;
+
+} // namespace hashutil
