@@ -7,9 +7,10 @@
 #include <string>
 #include <cstdio>
 
-// Recursively delete all regular files inside a directory, keep the dir itself.
-// Safer than bind-mount: no mount table footprint, no race with app startup.
-static int purge_log_dir(const std::string& path) {
+// Recursively delete regular files inside a directory tree, keep dirs intact.
+// Safer than bind-mount: no mount table footprint, game recreates dirs on launch.
+static int purge_dir(const std::string& path, int depth = 0) {
+    if (depth > 8) return 0; // guard against symlink loops
     DIR* d = opendir(path.c_str());
     if (!d) return 0;
 
@@ -20,14 +21,14 @@ static int purge_log_dir(const std::string& path) {
         std::string full = path + "/" + e->d_name;
 
         struct stat st;
-        if (lstat(full.c_str(), &st) < 0) continue;
+        if (lstat(full.c_str(), &st) < 0) continue; // lstat: never follow symlinks
 
         if (S_ISREG(st.st_mode)) {
             if (remove(full.c_str()) == 0) removed++;
         } else if (S_ISDIR(st.st_mode)) {
-            removed += purge_log_dir(full);
+            removed += purge_dir(full, depth + 1);
         }
-        // Skip symlinks, special files — never follow them
+        // Symlinks and special files: skip entirely
     }
     closedir(d);
     return removed;
@@ -47,44 +48,43 @@ GameResult apply_game_mode(const Json& cfg) {
         std::string pkg = game.value("package", "");
         if (pkg.empty()) continue;
 
-        // === DOWNSCALE via Android GameManager API ===
+        // === DOWNSCALE via Android GameManager API (API 31+) ===
         // cmd game downscale <factor> <package>
-        // Android 12+ (API 31). Factor: 0.0–1.0 (1.0 = native res).
+        // factor: 0.0–1.0 (1.0 = native res). Applied system-side, game unaware.
         if (game.contains("downscale") && game["downscale"].is_number()) {
             double factor = game["downscale"].get<double>();
             if (factor > 0.0 && factor <= 1.0) {
-                char factor_str[16];
-                snprintf(factor_str, sizeof(factor_str), "%.2f", factor);
-                auto r = exec_cmd({"cmd", "game", "downscale", factor_str, pkg});
+                char fs[16];
+                snprintf(fs, sizeof(fs), "%.2f", factor);
+                auto r = exec_cmd({"cmd", "game", "downscale", fs, pkg});
                 if (r.ok()) {
-                    Logger::info("game_mode: downscale " + pkg + " -> " + factor_str);
+                    Logger::info("game_mode: " + pkg + " downscale=" + fs);
                     res.downscale_set++;
                 } else {
                     Logger::warn("game_mode: downscale failed for " + pkg +
-                                 " (code=" + std::to_string(r.exit_code) + ")");
+                                 " (exit=" + std::to_string(r.exit_code) + ")");
                     res.failed++;
                 }
             }
         }
 
-        // === LOG CLEANUP (replaces bind-mount /dev/null) ===
-        // Periodic purge: delete contents of known log directories.
-        // The game recreates empty log dirs on next launch — this is benign.
+        // === LOG CLEANUP ===
+        // Purges log file contents on each apply call (boot / config change).
+        // Game recreates log dirs on next launch — benign.
         if (game.value("cleanup_logs", false)) {
-            if (game.contains("log_dirs") && game["log_dirs"].is_array()) {
-                for (auto& dir_entry : game["log_dirs"]) {
-                    if (!dir_entry.is_string()) continue;
-                    std::string dir = dir_entry.get<std::string>();
+            if (!game.contains("log_dirs") || !game["log_dirs"].is_array()) continue;
+            for (auto& dir_j : game["log_dirs"]) {
+                if (!dir_j.is_string()) continue;
+                std::string dir = dir_j.get<std::string>();
 
-                    struct stat st;
-                    if (stat(dir.c_str(), &st) != 0 || !S_ISDIR(st.st_mode)) continue;
+                struct stat st;
+                if (stat(dir.c_str(), &st) != 0 || !S_ISDIR(st.st_mode)) continue;
 
-                    int n = purge_log_dir(dir);
-                    if (n > 0) {
-                        Logger::info("game_mode: cleaned " + std::to_string(n) +
-                                     " log files from " + dir);
-                        res.logs_cleaned += n;
-                    }
+                int n = purge_dir(dir);
+                if (n > 0) {
+                    Logger::info("game_mode: cleaned " + std::to_string(n) +
+                                 " files from " + dir);
+                    res.logs_cleaned += n;
                 }
             }
         }
@@ -92,6 +92,6 @@ GameResult apply_game_mode(const Json& cfg) {
 
     Logger::info("game_mode: downscale_set=" + std::to_string(res.downscale_set) +
                  " logs_cleaned=" + std::to_string(res.logs_cleaned) +
-                 " failed=" + std::to_string(res.failed));
+                 " failed="       + std::to_string(res.failed));
     return res;
 }
