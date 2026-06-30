@@ -91,17 +91,17 @@ RulesResult apply_rules(const Json& cfg, const char* hash_cache_path, bool force
         return res;
     }
 
-    std::string src_path     = cfg["_source_path"].get<std::string>();
-    std::string current_hash = hash_file(src_path.c_str());
+    std::string src_path = cfg["_source_path"].get<std::string>();
+    const auto current_hash = hashutil::hash_file(src_path);
 
-    if (current_hash.empty()) {
+    if (!current_hash) {
         Logger::err("rules: cannot hash " + src_path + " — file missing or unreadable");
         return res;
     }
 
     if (!force) {
         std::string saved = load_hash_cache(hash_cache_path);
-        if (saved == current_hash) {
+        if (saved == *current_hash) {
             Logger::info("rules: unchanged, skipping");
             return res;
         }
@@ -113,7 +113,7 @@ RulesResult apply_rules(const Json& cfg, const char* hash_cache_path, bool force
 
     // Save hash after full pass — even partial success is recorded
     // so next boot skips if config still same
-    save_hash_cache(hash_cache_path, current_hash);
+    save_hash_cache(hash_cache_path, *current_hash);
 
     Logger::info("rules: done — components=" + std::to_string(res.components_ok) +
                  " appops=" + std::to_string(res.appops_ok) +

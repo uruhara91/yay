@@ -9,6 +9,7 @@
 #include <sys/wait.h>
 #include <poll.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <signal.h>
 
 static constexpr const char* CONFIG_DIR = "/data/adb/yay/config";
@@ -119,7 +120,8 @@ int main(int /*argc*/, char* /*argv*/[]) {
         while (true) {
             int d = poll(&pfd, 1, DEBOUNCE_MS);
             if (d <= 0) break;
-            read(ifd, buf, sizeof(buf)); // drain, discard
+            const auto drained = read(ifd, buf, sizeof(buf)); // drain, discard
+            static_cast<void>(drained);
         }
 
         spawn_apply(triggered_mode);

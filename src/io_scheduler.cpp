@@ -53,9 +53,9 @@ IOResult apply_io_scheduler(const Json& cfg) {
 
         // loop*: no scheduling needed, set none + disable stats
         if (dev.rfind("loop", 0) == 0) {
-            sysfs_write((qdir + "/scheduler").c_str(),  "none");
-            sysfs_write((qdir + "/iostats").c_str(),    "0");
-            sysfs_write((qdir + "/add_random").c_str(), "0");
+            static_cast<void>(sysfs_write(qdir + "/scheduler", "none"));
+            static_cast<void>(sysfs_write(qdir + "/iostats", "0"));
+            static_cast<void>(sysfs_write(qdir + "/add_random", "0"));
             res.configured++;
             continue;
         }
@@ -78,12 +78,12 @@ IOResult apply_io_scheduler(const Json& cfg) {
         }
 
         // Disable iostat accounting (reduces per-I/O overhead)
-        sysfs_write((qdir + "/iostats").c_str(),    "0");
+        static_cast<void>(sysfs_write(qdir + "/iostats", "0"));
         // Don't contribute to kernel entropy pool from block events
-        sysfs_write((qdir + "/add_random").c_str(), "0");
+        static_cast<void>(sysfs_write(qdir + "/add_random", "0"));
 
         if (!read_ahead.empty())
-            sysfs_write((qdir + "/read_ahead_kb").c_str(), read_ahead.c_str());
+            static_cast<void>(sysfs_write(qdir + "/read_ahead_kb", read_ahead));
     }
     closedir(dir);
 

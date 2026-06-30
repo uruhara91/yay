@@ -1,19 +1,39 @@
 #pragma once
+
+#include <chrono>
+#include <initializer_list>
+#include <span>
 #include <string>
-#include <vector>
+#include <string_view>
+
+constexpr std::chrono::seconds kDefaultExecTimeout{10};
 
 struct ExecResult {
-    int         exit_code;
+    int exit_code = -1;
     std::string stdout_str;
-    bool ok() const { return exit_code == 0; }
+
+    [[nodiscard]]
+    bool ok() const noexcept
+    {
+        return exit_code == 0;
+    }
 };
 
 // Run a command via execvp (no shell), capture stdout, return result.
-// argv must be null-terminated. Timeout in seconds (0 = no timeout).
-ExecResult exec_cmd(const std::vector<std::string>& argv, int timeout_sec = 10);
+[[nodiscard]]
+ExecResult exec_cmd(
+    std::span<const std::string_view> argv,
+    std::chrono::seconds timeout = kDefaultExecTimeout) noexcept;
+
+[[nodiscard]]
+ExecResult exec_cmd(
+    std::initializer_list<std::string_view> argv,
+    int timeout_sec = static_cast<int>(kDefaultExecTimeout.count())) noexcept;
 
 // Write a string to a sysfs/procfs node. Returns true on success.
-bool sysfs_write(const char* path, const char* value);
+[[nodiscard]]
+bool sysfs_write(std::string_view path, std::string_view value) noexcept;
 
 // Read a sysfs node. Returns "" on error.
-std::string sysfs_read(const char* path);
+[[nodiscard]]
+std::string sysfs_read(std::string_view path) noexcept;

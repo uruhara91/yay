@@ -79,7 +79,8 @@ static void run_io() {
     // TCP congestion control: cubic is well-tested on mobile
     std::string avail = sysfs_read("/proc/sys/net/ipv4/tcp_available_congestion_control");
     if (avail.find("cubic") != std::string::npos)
-        sysfs_write("/proc/sys/net/ipv4/tcp_congestion_control", "cubic");
+        static_cast<void>(
+            sysfs_write("/proc/sys/net/ipv4/tcp_congestion_control", "cubic"));
 }
 
 // ─── rules ────────────────────────────────────────────────────────────────────
@@ -121,7 +122,7 @@ static void run_boot() {
     if (pid == 0) {
         setsid();
         sleep(60);
-        exec_cmd({"cmd", "sm", "fstrim"}, 120);
+        static_cast<void>(exec_cmd({"cmd", "sm", "fstrim"}, 120));
         _exit(0);
     }
     // Parent does NOT waitpid — intentional.
