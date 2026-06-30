@@ -59,7 +59,7 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "version_code=$versionCode" >> "$GITHUB_OUTPUT"
 
-      - name: Package flashable module zip
+      - name: Stage flashable module
         run: |
           stage=staging/yay
           mkdir -p "$stage"
@@ -78,16 +78,13 @@ jobs:
           chmod 755 "$stage"/bin/yay_apply "$stage"/bin/yay_watch
           chmod 755 "$stage"/customize.sh "$stage"/post-fs-data.sh "$stage"/service.sh
 
-          out_name="yay-${{ steps.ver.outputs.version }}-${{ inputs.build_type }}.zip"
-          echo "ZIP_NAME=$out_name" >> "$GITHUB_ENV"
-
-          cd staging/yay
-          zip -r9 "../../$out_name" . -x ".*"
-
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.ZIP_NAME }}
-          path: ${{ env.ZIP_NAME }}
+          # upload-artifact v4 zips the directory automatically — uploading
+          # a pre-made .zip would produce a .zip inside a .zip on download.
+          # The artifact name becomes the downloaded filename + .zip.
+          name: yay-${{ steps.ver.outputs.version }}-${{ inputs.build_type }}
+          path: staging/yay/
           retention-days: 30
           if-no-files-found: error

@@ -7,15 +7,14 @@
 
 #include <cstdlib>
 #include <cstring>
+#include <ctime>
+#include <fcntl.h>
 #include <string>
 #include <unistd.h>
 
 // ─── Data paths — all under /data/adb/yay/ ───────────────────────────────────
-// Log rotation is handled internally by Logger (mutex-protected, checked on
-// every write). No separate rotation logic here — a second independent
-// rotator racing against Logger's own would risk renaming the file out from
-// under an open fd mid-write.
 static constexpr const char* LOG_FILE    = "/data/adb/yay/run.log";
+static constexpr const char* LOG_PREV    = "/data/adb/yay/run.log.1";
 static constexpr const char* RULES_JSON  = "/data/adb/yay/config/rules.json";
 static constexpr const char* GAME_JSON   = "/data/adb/yay/config/game_config.json";
 static constexpr const char* IO_JSON     = "/data/adb/yay/config/io_config.json";
@@ -26,6 +25,55 @@ static constexpr const char* IO_JSON     = "/data/adb/yay/config/io_config.json"
 // resets every boot — they always re-apply unconditionally, no hash
 // involved, see apply_game_mode() in game_mode.cpp and run_io() below.
 static constexpr const char* RULES_HASH  = "/data/adb/yay/cache/rules.hash";
+// Written by --full and --boot so a subsequent run within the same boot
+// session can detect the double-run and skip io+game (see run_boot).
+static constexpr const char* BOOT_STAMP  = "/data/adb/yay/cache/last_boot_apply";
+// --boot skips io+game if --full already ran within this many seconds.
+// 300 s (5 min) covers the worst-case gap between install-time --full
+// and the first service.sh --boot on the same device session.
+static constexpr time_t kBootStampWindowSecs = 300;
+
+// ─── helpers ─────────────────────────────────────────────────────────────────
+
+// Rotate log on boot: move current log to .1, start fresh.
+// Called before Logger::init so the new session starts on a clean file.
+// Using rename() here is safe because Logger hasn't opened the fd yet.
+static void rotate_log_on_boot() noexcept {
+    ::rename(LOG_FILE, LOG_PREV); // best-effort, ignore error
+}
+
+// Write current epoch to BOOT_STAMP atomically.
+static void write_boot_stamp() noexcept {
+    const std::string tmp = std::string(BOOT_STAMP) + ".tmp";
+    const time_t now = ::time(nullptr);
+    const std::string val = std::to_string(now) + "\n";
+    int fd = ::open(tmp.c_str(), O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0600);
+    if (fd < 0) return;
+    const char* p = val.c_str();
+    size_t rem = val.size();
+    while (rem > 0) {
+        auto w = ::write(fd, p, rem);
+        if (w <= 0) { ::close(fd); ::unlink(tmp.c_str()); return; }
+        p += w; rem -= static_cast<size_t>(w);
+    }
+    ::fsync(fd);
+    ::close(fd);
+    ::rename(tmp.c_str(), BOOT_STAMP);
+}
+
+// Returns true if BOOT_STAMP exists and was written within kBootStampWindowSecs.
+// Used by --boot to skip io+game when --full already ran in the same session.
+static bool boot_stamp_fresh() noexcept {
+    int fd = ::open(BOOT_STAMP, O_RDONLY | O_CLOEXEC);
+    if (fd < 0) return false;
+    char buf[32] = {};
+    auto n = ::read(fd, buf, sizeof(buf) - 1);
+    ::close(fd);
+    if (n <= 0) return false;
+    const time_t stamp = static_cast<time_t>(::atoll(buf));
+    const time_t now   = ::time(nullptr);
+    return (now >= stamp) && (now - stamp < kBootStampWindowSecs);
+}
 
 // Load a config file and reject it outright if it doesn't have the expected
 // shape for `kind` — see validate_config_shape() in json_config.h/.cpp for
@@ -129,16 +177,22 @@ static void run_game() {
 }
 
 // ─── boot ─────────────────────────────────────────────────────────────────────
-// Called from service.sh after boot_completed. Runs io and game mode
-// unconditionally every boot (Android resets both kinds of state on its
-// own), and rules only if rules.json changed since last run (hash-guarded
-// inside apply_rules — see rules_engine.cpp).
+// Called from service.sh after boot_completed.
+// Rules run only if rules.json changed (hash-guarded in apply_rules).
+// IO + game are skipped if --full already ran within kBootStampWindowSecs
+// (e.g. first-install: customize.sh --full runs, then service.sh --boot
+// fires on the same boot 52s later — no reason to redo io+game twice).
 static void run_boot() {
     Logger::info("yay: --boot");
 
-    run_io();
+    if (boot_stamp_fresh()) {
+        Logger::info("yay: --boot skipping io+game (--full ran recently)");
+    } else {
+        run_io();
+        run_game();
+    }
+
     run_rules(/*force=*/false, /*dry_run=*/false);
-    run_game();
 
     // fstrim: deferred 60s — avoids competing with early-boot I/O.
     // Orphaned child: parent exits immediately, child runs in background.
@@ -155,21 +209,21 @@ static void run_boot() {
 }
 
 // ─── full (install / update) ──────────────────────────────────────────────────
-// Force-apply everything. Does NOT call run_boot() to avoid duplicate io run.
+// Force-apply everything, then write a boot stamp so a subsequent --boot in
+// the same session knows it can skip io+game.
 static void run_full() {
     Logger::info("yay: --full");
 
     run_io();
-    run_rules(/*force=*/true, /*dry_run=*/false);   // force: ignore hash, always apply on install
+    run_rules(/*force=*/true, /*dry_run=*/false);
     run_game();
+    write_boot_stamp();
 
     Logger::info("yay: --full done");
 }
 
 // ─── entry point ──────────────────────────────────────────────────────────────
 int main(int argc, char* argv[]) {
-    Logger::init("yay", LOG_FILE);
-
     const char* mode    = "--boot";
     bool        force   = false;
     bool        dry_run = false;
@@ -184,6 +238,15 @@ int main(int argc, char* argv[]) {
         else if (strcmp(argv[i], "--force")   == 0) force   = true;
         else if (strcmp(argv[i], "--dry-run") == 0) dry_run = true;
     }
+
+    // Rotate log before opening it so each boot starts on a clean file.
+    // Only --boot and --full represent a new device session; --rules/--game/
+    // --io are in-session triggered runs that should append to the current log.
+    if (strcmp(mode, "--boot") == 0 || strcmp(mode, "--full") == 0) {
+        rotate_log_on_boot();
+    }
+
+    Logger::init("yay", LOG_FILE);
 
     // --dry-run only makes sense paired with --rules (it previews `cmd
     // package`/`cmd appops` calls without invoking them or touching the

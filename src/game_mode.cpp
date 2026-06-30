@@ -201,6 +201,9 @@ GameResult apply_game_mode(const Json& cfg) {
         // === DOWNSCALE via Android GameManager API (API 31+) ===
         // cmd game downscale <factor> <package>
         // factor: 0.0–1.0 (1.0 = native res). Applied system-side, game unaware.
+        // exit=255 typically means `cmd game` is not available on this ROM/API
+        // level — not a hard failure worth retrying. We log stdout so the
+        // exact Android error message appears in run.log for diagnosis.
         if (game.contains("downscale") && game["downscale"].is_number()) {
             double factor = game["downscale"].get<double>();
             if (factor > 0.0 && factor <= 1.0) {
@@ -211,8 +214,16 @@ GameResult apply_game_mode(const Json& cfg) {
                     Logger::info("game_mode: " + pkg + " downscale=" + fs);
                     res.downscale_set++;
                 } else {
+                    // Trim trailing whitespace from stdout for a clean log line.
+                    std::string out = r.stdout_str;
+                    while (!out.empty() &&
+                           (out.back() == '\n' || out.back() == '\r' ||
+                            out.back() == ' ')) {
+                        out.pop_back();
+                    }
                     Logger::warn("game_mode: downscale failed for " + pkg +
-                                 " (exit=" + std::to_string(r.exit_code) + ")");
+                                 " (exit=" + std::to_string(r.exit_code) +
+                                 (out.empty() ? ")" : "): " + out));
                     res.failed++;
                 }
             }
