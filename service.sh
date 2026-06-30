@@ -3,7 +3,7 @@ MODDIR=${0%/*}
 
 # Wait for full boot
 until [ "$(getprop sys.boot_completed)" = "1" ]; do
-    sleep 3
+    sleep 10
 done
 
 # One-shot: runs, applies, exits. No daemon.
