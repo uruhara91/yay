@@ -344,7 +344,8 @@ std::vector<ExecResult> exec_batch(
     std::span<const std::vector<std::string>> commands,
     size_t max_concurrent,
     std::chrono::seconds item_timeout,
-    std::chrono::seconds total_budget) noexcept
+    std::chrono::seconds total_budget,
+    size_t max_consecutive_spawn_failures) noexcept
 {
     std::vector<ExecResult> results(commands.size());
     if (commands.empty()) {
@@ -356,20 +357,41 @@ std::vector<ExecResult> exec_batch(
             std::chrono::steady_clock::now() + total_budget;
         const size_t concurrency =
             std::max<size_t>(1U, std::min(max_concurrent, commands.size()));
+        const size_t spawn_failure_limit =
+            std::max<size_t>(1U, max_consecutive_spawn_failures);
 
         std::vector<BatchChild> in_flight;
         in_flight.reserve(concurrency);
 
         size_t next_to_start = 0U;
         bool budget_exceeded = false;
+        size_t consecutive_spawn_failures = 0U;
+        bool spawn_circuit_open = false;
 
         // Launch the initial wave up to `concurrency`.
+        //
+        // spawn_circuit_open guards against a burst of fork()/pipe2()
+        // failures in a row — almost always a sign the system is out of
+        // file descriptors or process slots, not a transient blip. When
+        // that happens, retrying immediately in a tight loop just burns
+        // CPU while the underlying resource pressure is still present, so
+        // once the threshold is hit we stop attempting further spawns for
+        // the rest of this batch and fail the remaining commands outright.
+        // A single isolated failure does not trip this — the counter
+        // resets on the next successful spawn — only a genuine run of
+        // failures does.
         auto try_start_next = [&]() noexcept {
             while (in_flight.size() < concurrency &&
                    next_to_start < commands.size()) {
                 if (std::chrono::steady_clock::now() >= batch_deadline) {
                     budget_exceeded = true;
                     return;
+                }
+
+                if (spawn_circuit_open) {
+                    results[next_to_start] = ExecResult{-1, {}};
+                    ++next_to_start;
+                    continue;
                 }
 
                 BatchChild child;
@@ -383,9 +405,19 @@ std::vector<ExecResult> exec_batch(
                     // occupy a concurrency slot for it.
                     results[next_to_start] = ExecResult{-1, {}};
                     ++next_to_start;
+                    ++consecutive_spawn_failures;
+                    if (consecutive_spawn_failures >= spawn_failure_limit) {
+                        Logger::err(
+                            "exec_util: " +
+                            std::to_string(consecutive_spawn_failures) +
+                            " consecutive spawn failures — aborting "
+                            "remaining spawns in this batch");
+                        spawn_circuit_open = true;
+                    }
                     continue;
                 }
 
+                consecutive_spawn_failures = 0U;
                 child.started = true;
                 in_flight.push_back(std::move(child));
                 ++next_to_start;

@@ -20,6 +20,15 @@ constexpr size_t kDefaultBatchConcurrency = 6U;
 constexpr std::chrono::seconds kDefaultBatchItemTimeout{5};
 constexpr std::chrono::seconds kDefaultBatchTotalBudget{5 * 60};
 
+// If this many spawn attempts (fork/pipe2) fail back-to-back during a
+// batch, stop trying to spawn further commands in that batch and fail the
+// rest immediately. A run of consecutive failures almost always means the
+// system is out of file descriptors or process slots — retrying in a tight
+// loop won't fix that and just burns CPU while the device is already under
+// resource pressure. A single isolated failure does not count against this
+// (the counter resets on the next successful spawn).
+constexpr size_t kDefaultMaxConsecutiveSpawnFailures = 5U;
+
 struct ExecResult {
     int exit_code = -1;
     std::string stdout_str;
@@ -56,13 +65,18 @@ ExecResult exec_cmd(
 //     children still running are killed and any commands not yet started
 //     are skipped — reported as ExecResult{-1, ""} (ok() == false), never
 //     silently treated as success.
+//   - If `max_consecutive_spawn_failures` consecutive spawn attempts fail
+//     (fork/pipe2 erroring, not a child exiting nonzero), remaining
+//     unstarted commands are failed immediately without further spawn
+//     attempts — see constant doc above.
 //   - If `commands` is empty, returns an empty vector immediately.
 [[nodiscard]]
 std::vector<ExecResult> exec_batch(
     std::span<const std::vector<std::string>> commands,
     size_t max_concurrent = kDefaultBatchConcurrency,
     std::chrono::seconds item_timeout = kDefaultBatchItemTimeout,
-    std::chrono::seconds total_budget = kDefaultBatchTotalBudget) noexcept;
+    std::chrono::seconds total_budget = kDefaultBatchTotalBudget,
+    size_t max_consecutive_spawn_failures = kDefaultMaxConsecutiveSpawnFailures) noexcept;
 
 // Write a string to a sysfs/procfs node. Returns true on success.
 [[nodiscard]]
