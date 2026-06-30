@@ -153,14 +153,7 @@
 
   "appops": [
     {
-      "package": "com.transsion.microintellegence",
-      "op": 40,
-      "mode": "ignore",
-      "enabled": true,
-      "note": "op 40 = GET_USAGE_STATS"
-    },
-    {
-      "package": "com.transsion.microintellegence",
+      "package": "com.transsion.microintelligence",
       "op": 63,
       "mode": "ignore",
       "enabled": true,
