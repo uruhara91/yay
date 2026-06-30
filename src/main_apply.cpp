@@ -27,6 +27,33 @@ static constexpr const char* IO_JSON     = "/data/adb/yay/config/io_config.json"
 // involved, see apply_game_mode() in game_mode.cpp and run_io() below.
 static constexpr const char* RULES_HASH  = "/data/adb/yay/cache/rules.hash";
 
+// Load a config file and reject it outright if it doesn't have the expected
+// shape for `kind` — see validate_config_shape() in json_config.h/.cpp for
+// what "shape" means here. This runs for every mode (--rules, --game,
+// --boot, --full, dry-run included): a structurally wrong config should
+// never reach the apply layer at all, since apply_components/apply_appops/
+// apply_game_mode are only designed to skip malformed *individual entries*,
+// not recover from e.g. "components" being an object instead of an array.
+// Most valuable once these files may be written by a web UI rather than
+// hand-edited — a bug on that side should surface here as a clear rejected
+// config, not as a partially-applied or confusingly-empty run.
+[[nodiscard]]
+static std::optional<Json> load_and_validate(const char* path, ConfigKind kind) {
+    auto cfg = load_json(path);
+    if (!cfg) {
+        Logger::err(std::string("yay: cannot load ") + path);
+        return std::nullopt;
+    }
+
+    std::string error;
+    if (!validate_config_shape(*cfg, kind, &error)) {
+        Logger::err(std::string("yay: ") + path + " failed shape validation: " + error);
+        return std::nullopt;
+    }
+
+    return cfg;
+}
+
 // ─── post-fs-data ─────────────────────────────────────────────────────────────
 // Runs before userspace is up. Minimal, fast — only resetprop.
 static void run_post() {
@@ -63,7 +90,7 @@ static void run_post() {
 // ─── io ───────────────────────────────────────────────────────────────────────
 // Always runs at boot — I/O scheduler state resets on every reboot.
 static void run_io() {
-    auto cfg = load_json(IO_JSON);
+    auto cfg = load_and_validate(IO_JSON, ConfigKind::IoConfig);
     if (cfg) {
         apply_io_scheduler(*cfg);
     } else {
@@ -79,23 +106,23 @@ static void run_io() {
 }
 
 // ─── rules ────────────────────────────────────────────────────────────────────
-static void run_rules(bool force) {
-    Logger::info(std::string("yay: --rules") + (force ? " --force" : ""));
-    auto cfg = load_json(RULES_JSON);
+static void run_rules(bool force, bool dry_run) {
+    Logger::info(std::string("yay: --rules") +
+                 (force ? " --force" : "") +
+                 (dry_run ? " --dry-run" : ""));
+    auto cfg = load_and_validate(RULES_JSON, ConfigKind::Rules);
     if (!cfg) {
-        Logger::err("yay: cannot load rules.json");
         return;
     }
     (*cfg)["_source_path"] = RULES_JSON;
-    static_cast<void>(apply_rules(*cfg, RULES_HASH, force));
+    static_cast<void>(apply_rules(*cfg, RULES_HASH, force, dry_run));
 }
 
 // ─── game ─────────────────────────────────────────────────────────────────────
 static void run_game() {
     Logger::info("yay: --game");
-    auto cfg = load_json(GAME_JSON);
+    auto cfg = load_and_validate(GAME_JSON, ConfigKind::GameConfig);
     if (!cfg) {
-        Logger::err("yay: cannot load game_config.json");
         return;
     }
     apply_game_mode(*cfg);
@@ -110,7 +137,7 @@ static void run_boot() {
     Logger::info("yay: --boot");
 
     run_io();
-    run_rules(/*force=*/false);
+    run_rules(/*force=*/false, /*dry_run=*/false);
     run_game();
 
     // fstrim: deferred 60s — avoids competing with early-boot I/O.
@@ -133,7 +160,7 @@ static void run_full() {
     Logger::info("yay: --full");
 
     run_io();
-    run_rules(/*force=*/true);   // force: ignore hash, always apply on install
+    run_rules(/*force=*/true, /*dry_run=*/false);   // force: ignore hash, always apply on install
     run_game();
 
     Logger::info("yay: --full done");
@@ -143,22 +170,35 @@ static void run_full() {
 int main(int argc, char* argv[]) {
     Logger::init("yay", LOG_FILE);
 
-    const char* mode  = "--boot";
-    bool        force = false;
+    const char* mode    = "--boot";
+    bool        force   = false;
+    bool        dry_run = false;
 
     for (int i = 1; i < argc; i++) {
-        if      (strcmp(argv[i], "--post")  == 0) mode  = "--post";
-        else if (strcmp(argv[i], "--boot")  == 0) mode  = "--boot";
-        else if (strcmp(argv[i], "--rules") == 0) mode  = "--rules";
-        else if (strcmp(argv[i], "--game")  == 0) mode  = "--game";
-        else if (strcmp(argv[i], "--full")  == 0) mode  = "--full";
-        else if (strcmp(argv[i], "--io")    == 0) mode  = "--io";
-        else if (strcmp(argv[i], "--force") == 0) force = true;
+        if      (strcmp(argv[i], "--post")    == 0) mode    = "--post";
+        else if (strcmp(argv[i], "--boot")    == 0) mode    = "--boot";
+        else if (strcmp(argv[i], "--rules")   == 0) mode    = "--rules";
+        else if (strcmp(argv[i], "--game")    == 0) mode    = "--game";
+        else if (strcmp(argv[i], "--full")    == 0) mode    = "--full";
+        else if (strcmp(argv[i], "--io")      == 0) mode    = "--io";
+        else if (strcmp(argv[i], "--force")   == 0) force   = true;
+        else if (strcmp(argv[i], "--dry-run") == 0) dry_run = true;
+    }
+
+    // --dry-run only makes sense paired with --rules (it previews `cmd
+    // package`/`cmd appops` calls without invoking them or touching the
+    // hash cache — see apply_rules()). It's silently ignored for every
+    // other mode rather than treated as an error, since a caller scripting
+    // this (e.g. a future web UI "preview changes" button) is more likely
+    // to always pass the flag than to special-case which mode supports it.
+    if (dry_run && strcmp(mode, "--rules") != 0) {
+        Logger::warn("yay: --dry-run only applies to --rules, ignoring for this mode");
+        dry_run = false;
     }
 
     if      (strcmp(mode, "--post")  == 0) run_post();
     else if (strcmp(mode, "--boot")  == 0) run_boot();
-    else if (strcmp(mode, "--rules") == 0) run_rules(force);
+    else if (strcmp(mode, "--rules") == 0) run_rules(force, dry_run);
     else if (strcmp(mode, "--game")  == 0) run_game();
     else if (strcmp(mode, "--full")  == 0) run_full();
     else if (strcmp(mode, "--io")    == 0) run_io();
