@@ -156,7 +156,7 @@
       "package": "com.transsion.microintelligence",
       "op": 63,
       "mode": "ignore",
-      "enabled": true,
+      "enabled": false,
       "note": "op 63 = RUN_IN_BACKGROUND"
     }
   ]
