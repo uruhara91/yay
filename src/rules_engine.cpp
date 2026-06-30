@@ -2,25 +2,12 @@
 #include "exec_util.h"
 #include "hash_util.h"
 #include "logger.h"
-#include <cstdio>
-#include <fstream>
 #include <string>
 #include <vector>
 
-static std::string load_hash_cache(const char* path) {
-    std::ifstream f(path);
-    if (!f.is_open()) return "";
-    std::string h;
-    std::getline(f, h);
-    return h;
-}
-
-static void save_hash_cache(const char* path, const std::string& hash) {
-    FILE* f = fopen(path, "w");
-    if (!f) return;
-    fprintf(f, "%s\n", hash.c_str());
-    fclose(f);
-}
+// Hash cache I/O delegated entirely to hashutil — atomic write (fsync + rename)
+// instead of a local fopen/fprintf helper, so a power-cycle mid-write can't
+// leave a corrupt/truncated hash file that would falsely skip a future apply.
 
 // Batch component disable: build one pm command per package to minimize fork()s.
 // Instead of 1 fork per component (100+ forks), we do 1 fork per package.
@@ -100,8 +87,8 @@ RulesResult apply_rules(const Json& cfg, const char* hash_cache_path, bool force
     }
 
     if (!force) {
-        std::string saved = load_hash_cache(hash_cache_path);
-        if (saved == *current_hash) {
+        const auto saved = hashutil::read_hash_cache(hash_cache_path);
+        if (saved && *saved == *current_hash) {
             Logger::info("rules: unchanged, skipping");
             return res;
         }
@@ -112,8 +99,10 @@ RulesResult apply_rules(const Json& cfg, const char* hash_cache_path, bool force
     apply_appops(cfg, res);
 
     // Save hash after full pass — even partial success is recorded
-    // so next boot skips if config still same
-    save_hash_cache(hash_cache_path, *current_hash);
+    // so next boot skips if config still same. Atomic: tmp write + fsync + rename.
+    if (!hashutil::write_hash_cache_atomic(hash_cache_path, *current_hash)) {
+        Logger::warn("rules: failed to persist hash cache — next boot will re-apply");
+    }
 
     Logger::info("rules: done — components=" + std::to_string(res.components_ok) +
                  " appops=" + std::to_string(res.appops_ok) +

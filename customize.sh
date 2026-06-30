@@ -28,6 +28,6 @@ chmod 755 "$MODDIR/bin/yay_apply"
 chmod 755 "$MODDIR/bin/yay_watch"
 
 ui_print "- yay: running full first-time apply..."
-"$MODDIR/bin/yay_apply" --full --moddir "$MODDIR"
+"$MODDIR/bin/yay_apply" --full
 
 ui_print "- yay: done."

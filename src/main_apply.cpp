@@ -9,28 +9,18 @@
 #include <cstring>
 #include <string>
 #include <unistd.h>
-#include <sys/stat.h>
-#include <cstdio>
 
 // ─── Data paths — all under /data/adb/yay/ ───────────────────────────────────
+// Log rotation is handled internally by Logger (mutex-protected, checked on
+// every write). No separate rotation logic here — a second independent
+// rotator racing against Logger's own would risk renaming the file out from
+// under an open fd mid-write.
 static constexpr const char* LOG_FILE    = "/data/adb/yay/run.log";
-static constexpr const char* LOG_MAX     = "/data/adb/yay/run.log.1"; // rotation backup
 static constexpr const char* RULES_JSON  = "/data/adb/yay/config/rules.json";
 static constexpr const char* GAME_JSON   = "/data/adb/yay/config/game_config.json";
 static constexpr const char* IO_JSON     = "/data/adb/yay/config/io_config.json";
 static constexpr const char* RULES_HASH  = "/data/adb/yay/cache/rules.hash";
 static constexpr const char* GAME_HASH   = "/data/adb/yay/cache/game.hash";
-
-static constexpr long LOG_MAX_BYTES = 512 * 1024; // 512 KB
-
-// Simple log rotation: rename run.log → run.log.1 when over limit.
-// Keeps at most 2 files total — no unbounded growth.
-static void rotate_log_if_needed() {
-    struct stat st;
-    if (stat(LOG_FILE, &st) != 0) return;
-    if (st.st_size < LOG_MAX_BYTES) return;
-    rename(LOG_FILE, LOG_MAX); // overwrite previous backup
-}
 
 // ─── post-fs-data ─────────────────────────────────────────────────────────────
 // Runs before userspace is up. Minimal, fast — only resetprop.
@@ -144,7 +134,6 @@ static void run_full() {
 
 // ─── entry point ──────────────────────────────────────────────────────────────
 int main(int argc, char* argv[]) {
-    rotate_log_if_needed();
     Logger::init("yay", LOG_FILE);
 
     const char* mode  = "--boot";

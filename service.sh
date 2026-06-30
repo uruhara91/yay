@@ -7,7 +7,7 @@ until [ "$(getprop sys.boot_completed)" = "1" ]; do
 done
 
 # One-shot: runs, applies, exits. No daemon.
-"$MODDIR/bin/yay_apply" --boot --moddir "$MODDIR"
+"$MODDIR/bin/yay_apply" --boot
 
 # Optional: start inotify watcher only if user explicitly enables it
 # via sentinel file. Watcher sleeps in inotify_wait — near-zero overhead.

@@ -50,21 +50,6 @@ set(COMMON_SOURCES
     src/game_mode.cpp
 )
 
-target_compile_features(yay_common
-    PUBLIC
-        cxx_std_20
-)
-
-target_include_directories(yay_common
-    PUBLIC
-        src
-)
-
-set_target_properties(yay_common
-    PROPERTIES
-        CXX_EXTENSIONS OFF
-)
-
 add_executable(yay_apply
     src/main_apply.cpp
     ${COMMON_SOURCES}
@@ -131,7 +116,7 @@ foreach(target
         -Wno-unused-result
     )
 
-    target_link_options(${t} PRIVATE
+    target_link_options(${target} PRIVATE
         -Wl,--gc-sections
         -Wl,-z,relro
         -Wl,-z,now

@@ -104,7 +104,7 @@ int main(int /*argc*/, char* /*argv*/[]) {
             if (ev->len == 0) continue;
 
             for (auto& m : MAPPINGS) {
-                if (strncmp(ev->name, m.name, ev->len) == 0) {
+                if (strcmp(ev->name, m.name) == 0) {
                     triggered_mode = m.mode;
                     break;
                 }
