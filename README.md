@@ -26,11 +26,6 @@ downscale, log cleanup, the I/O scheduler, and TCP congestion control are
 all runtime state that Android itself resets every boot, so they need to be
 re-applied regardless of whether their config changed.
 
-Every config file is also checked for basic *structural* validity (right
-field types, arrays where arrays are expected) before it's handed to any
-apply path — see "Config validation" below. A config that fails this check
-is rejected outright and logged; nothing partial is applied from it.
-
 ---
 
 ## What it does
@@ -52,54 +47,7 @@ entry (Android's `pm`/`appops` shell commands don't support a batch form),
 but they run with bounded concurrency (several at once, not strictly
 one-at-a-time) and a per-item timeout, so a large `rules.json` doesn't turn
 into a long serial wait — see `exec_batch()` in `src/exec_util.h` for the
-exact mechanism and tunables. If spawning a command fails repeatedly in a
-row (5 consecutive failures by default — almost always a sign the device is
-out of file descriptors or process slots), the batch stops attempting
-further spawns and fails the rest immediately rather than retrying in a
-tight loop while resources are already under pressure.
-
----
-
-## Config validation
-
-Every load of `rules.json`, `game_config.json`, or `io_config.json` goes
-through two layers before anything is acted on:
-
-1. **Structural validation** (`validate_config_shape` in `json_config.cpp`)
-   — catches a config that parses as valid JSON but has the wrong shape:
-   `"components"` present but not an array, an array entry that isn't an
-   object, a `package`/`component`/`op` field of the wrong type. A file
-   that fails this check is rejected as a whole and logged with the
-   specific reason — nothing partial is applied.
-2. **Per-entry validation** (in `rules_engine.cpp`) — even a structurally
-   valid file can contain individual entries with malformed values (stray
-   whitespace, control characters, `..`, empty segments). These are
-   skipped individually with a warning rather than passed through to
-   `cmd package` / `cmd appops`, and duplicate entries (same package +
-   component, or same package + op) are deduplicated so they aren't
-   executed twice.
-
-This matters most once config files may be written by something other
-than a human hand-editing JSON — e.g. a future web UI — where a bug on
-that side should surface as a clear rejected-config error in the log,
-not as a partially-applied or silently-wrong run.
-
-### Dry-run mode
-
-`yay_apply --rules --dry-run` loads and validates `rules.json` exactly
-like a real `--rules` run, but logs every `cmd package` / `cmd appops`
-invocation it *would* make instead of actually running them — no
-subprocess is spawned, and the hash cache is neither read nor written.
-Useful for previewing the effect of a config change (by hand or from a
-future web UI) before committing to it. Output goes to the normal log
-(`/data/adb/yay/run.log` / `adb logcat -s yay`).
-
-```sh
-/data/adb/modules/yay/bin/yay_apply --rules --dry-run
-```
-
-`--dry-run` is only meaningful paired with `--rules`; it's ignored (with a
-log warning) if combined with any other mode.
+exact mechanism and tunables.
 
 ---
 
@@ -160,12 +108,6 @@ Edit JSON files directly. If inotify watcher is enabled, changes apply immediate
 
 Set `"enabled": false` to skip an entry without deleting it.
 
-`package` and `component` must look like ordinary Java-style dotted
-identifiers (letters, digits, `.`, `_`, `$`, no leading/trailing dot, no
-`..`) — anything else is skipped with a warning rather than passed to
-`cmd package`. `op` may be an integer or a numeric string; negative values
-are rejected.
-
 ### game_config.json
 
 ```json
@@ -186,11 +128,6 @@ are rejected.
 
 `downscale`: 0.0–1.0 (1.0 = native resolution). Requires Android 12+ (API 31).  
 `cleanup_logs`: purge contents of `log_dirs` on apply. No bind-mount, no mount table footprint.
-
-`log_dirs` entries must resolve under the app's own
-`/data/media/0/Android/{data,obb}/<package>/...` tree — anything else
-(wrong app, wrong root, `..`, or just the app's storage root with nothing
-under it) is rejected and logged instead of acted on.
 
 ### io_config.json
 
@@ -270,26 +207,3 @@ yay/
 ├── service.sh
 └── module.prop
 ```
-
----
-
-## Changelog
-
-**v1.1**
-- `rules.json` entries (`package`, `component`, `op`) are now validated
-  against a strict identifier format before being passed to `cmd package` /
-  `cmd appops`; malformed entries are skipped and logged instead of
-  executed as-is.
-- Duplicate `rules.json` entries (same target) are deduplicated before
-  execution.
-- New `validate_config_shape()` structural check runs on every config load
-  (`rules.json`, `game_config.json`, `io_config.json`) — a file with the
-  wrong top-level shape is rejected outright with a specific reason logged,
-  instead of partially applying whatever happened to parse.
-- New `yay_apply --rules --dry-run`: logs every command that would run
-  without executing anything or touching the hash cache.
-- `exec_batch()` now opens a circuit breaker after repeated consecutive
-  spawn failures (default: 5) instead of retrying fork()/pipe2() in a tight
-  loop under resource pressure.
-- Minor clarity fix in `game_mode.cpp`'s `is_safe_purge_target` (no
-  functional change).

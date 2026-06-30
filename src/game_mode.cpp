@@ -49,29 +49,29 @@ bool is_safe_purge_target(const std::string& path, const std::string& pkg) {
     if (path.empty() || path[0] != '/') return false;
     if (path.find("..") != std::string::npos) return false;
 
-    // Find the single allowed root this path actually starts with (a path
-    // can only legitimately match one, since the roots are disjoint
-    // prefixes) — avoids re-checking the "must have a segment after <pkg>"
-    // rule against roots that don't even apply to this path.
-    std::string_view matched_root;
+    bool under_allowed_root = false;
     for (const auto root : kAllowedRoots) {
         if (path.rfind(root, 0) == 0) {
-            matched_root = root;
+            under_allowed_root = true;
             break;
         }
     }
-    if (matched_root.empty()) return false;
+    if (!under_allowed_root) return false;
 
     // Refuse to purge the app's storage root itself or anything too
     // shallow under it (e.g. "/data/media/0/Android/data/<pkg>" with
     // nothing after it) — log_dirs should point at a specific subdirectory,
     // not the whole app data tree.
-    const std::string remainder = path.substr(matched_root.size());
-    // remainder looks like "<pkg>" or "<pkg>/..." — require a path segment
-    // after <pkg>.
-    const auto slash = remainder.find('/');
-    if (slash == std::string::npos || slash + 1 >= remainder.size()) {
-        return false;
+    for (const auto root : kAllowedRoots) {
+        if (path.rfind(root, 0) == 0) {
+            const std::string remainder = path.substr(root.size());
+            // remainder looks like "<pkg>" or "<pkg>/..." — require a
+            // path segment after <pkg>.
+            const auto slash = remainder.find('/');
+            if (slash == std::string::npos || slash + 1 >= remainder.size()) {
+                return false;
+            }
+        }
     }
 
     return path_contains_segment(path, pkg);
