@@ -1,0 +1,113 @@
+@import 'tailwindcss';
+
+/* ── MD3 Design Tokens ── */
+@theme {
+  --color-background:               var(--background,               #1c1014);
+  --color-surface:                  var(--surface,                  #1c1014);
+  --color-surface-dim:              var(--surfaceDim,               #1c1014);
+  --color-surface-bright:           var(--surfaceBright,            #433639);
+  --color-surface-container-lowest: var(--surfaceContainerLowest,   #18090f);
+  --color-surface-container-low:    var(--surfaceContainerLow,      #23191c);
+  --color-surface-container:        var(--surfaceContainer,         #281c20);
+  --color-surface-container-high:   var(--surfaceContainerHigh,     #33272a);
+  --color-surface-container-highest:var(--surfaceContainerHighest,  #3e3135);
+  --color-surface-variant:          var(--surfaceVariant,           #514347);
+  --color-on-surface:               var(--onSurface,                #f2dde2);
+  --color-on-surface-variant:       var(--onSurfaceVariant,         #d5c2c6);
+  --color-primary:                  var(--primary,                  #ffb0cc);
+  --color-on-primary:               var(--onPrimary,                #541d35);
+  --color-primary-container:        var(--primaryContainer,         #6f334b);
+  --color-on-primary-container:     var(--onPrimaryContainer,       #ffd9e4);
+  --color-secondary-container:      var(--secondaryContainer,       #4a333a);
+  --color-on-secondary-container:   var(--onSecondaryContainer,     #ffd9e4);
+  --color-error:                    var(--error,                    #ffb4ab);
+  --color-on-error:                 var(--onError,                  #690005);
+  --color-error-container:          var(--errorContainer,           #93000a);
+  --color-on-error-container:       var(--onErrorContainer,         #ffdad6);
+  --color-outline:                  var(--outline,                  #9e8c90);
+  --color-outline-variant:          var(--outlineVariant,           #514347);
+  --color-inverse-surface:          var(--inverseSurface,           #f2dde2);
+  --color-inverse-on-surface:       var(--inverseOnSurface,         #392d31);
+  --color-inverse-primary:          var(--inversePrimary,           #8b4a63);
+  --font-sans: 'Google Sans Flex', system-ui, sans-serif;
+}
+
+/* ── Base ── */
+*, *::before, *::after { box-sizing: border-box; }
+
+html {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  height: 100dvh;
+}
+html::-webkit-scrollbar { display: none; }
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--color-background);
+  color: var(--color-on-surface);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  height: 100dvh;
+  width: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+#app { height: 100dvh; }
+
+a, button, input, select, textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ── MD3 list card ── */
+.md3-list {
+  background-color: var(--color-surface-container);
+  border-radius: 1rem;
+  overflow: hidden;
+}
+.md3-list + .md3-list { margin-top: 0.375rem; }
+
+/* ── Ripple global ── */
+.ripple-wrapper {
+  position: relative;
+  overflow: hidden;
+  outline: none;
+  transition: background-color 0.2s ease;
+}
+.ripple-wrapper:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+.ripple-wrapper.non-touch::before {
+  content: '';
+  position: absolute; inset: 0;
+  background-color: var(--hover-color);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+  border-radius: inherit;
+}
+.ripple-wrapper.non-touch:hover::before { opacity: 1; }
+
+.ripple {
+  position: absolute;
+  border-radius: 50%;
+  transform: scale(0);
+  opacity: 0.6;
+  animation: ripple-anim ease-out forwards;
+  pointer-events: none;
+}
+.ripple.end { opacity: 0; }
+@keyframes ripple-anim { to { transform: scale(3); } }
+@media (prefers-reduced-motion: reduce) {
+  .ripple { animation-duration: 0.1s !important; }
+  @keyframes ripple-anim { to { transform: scale(1.5); } }
+}
+
+/* ── Scrollbar hidden utility ── */
+.scrollbar-hidden { scrollbar-width: none; }
+.scrollbar-hidden::-webkit-scrollbar { display: none; }
+
+/* ── Safe nav padding ── */
+.pb-safe-nav { padding-bottom: calc(var(--nav-height, 64px) + 0.5rem); }
