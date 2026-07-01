@@ -1,3 +1,6 @@
+@import url('https://mui.kernelsu.org/internal/insets.css');
+@import url('https://mui.kernelsu.org/internal/colors.css');
+
 @import 'tailwindcss';
 
 /* ── MD3 Design Tokens ── */
@@ -109,5 +112,18 @@ a, button, input, select, textarea {
 .scrollbar-hidden { scrollbar-width: none; }
 .scrollbar-hidden::-webkit-scrollbar { display: none; }
 
-/* ── Safe nav padding ── */
-.pb-safe-nav { padding-bottom: calc(var(--nav-height, 64px) + 0.5rem); }
+/*
+ * Safe nav padding: accounts for the navbar height (auto-set by
+ * Navigation.vue via ResizeObserver) plus any system inset already baked
+ * into the navbar's own padding — so we subtract it here to avoid double
+ * counting, matching Encore's approach.
+ */
+.pb-safe-nav {
+  padding-bottom: calc(var(--nav-height, 64px) - var(--window-inset-bottom, 0px));
+}
+
+@media (min-width: 768px) {
+  .pb-safe-nav {
+    padding-bottom: calc(2rem + var(--window-inset-bottom, 0px));
+  }
+}

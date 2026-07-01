@@ -74,9 +74,11 @@ export const useRulesStore = defineStore('rules', () => {
   }
 
   function addAppop(entry) {
+    const trimmedOp = String(entry.op).trim()
+    const numericOp = /^-?\d+$/.test(trimmedOp) ? parseInt(trimmedOp, 10) : trimmedOp
     appops.value.push({
       package: entry.package,
-      op:      entry.op,
+      op:      numericOp,
       mode:    entry.mode ?? 'ignore',
       enabled: true,
       note:    entry.note ?? '',

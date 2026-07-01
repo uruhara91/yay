@@ -8,12 +8,12 @@
           <div class="flex gap-2">
             <button @click="showDryRun" title="Preview"
               class="w-9 h-9 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant active:bg-surface-container-high transition-colors">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8a3 3 0 100 6 3 3 0 000-6z"/></svg>
+              <EyeIcon />
             </button>
             <button @click="saveAndApply" :disabled="store.saving" title="Save &amp; Apply"
               class="px-3 h-9 rounded-full bg-primary text-on-primary text-sm font-medium flex items-center gap-1.5
                      disabled:opacity-50 active:opacity-80 transition-opacity">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+              <PlayIcon />
               Apply
             </button>
           </div>
@@ -119,6 +119,12 @@
         <InputField v-model="newComp.package"   label="Package"   placeholder="com.example.app" />
         <InputField v-model="newComp.component" label="Component" placeholder="com.example.app.SomeService" />
         <InputField v-model="newComp.note"      label="Note (optional)" placeholder="" />
+        <p v-if="newComp.package && !isValidIdentifier(newComp.package)" class="text-[11px] text-error">
+          ⚠ Package must be letters/digits/. _ $ only, no leading/trailing dot or "..".
+        </p>
+        <p v-if="newComp.component && !isValidIdentifier(newComp.component)" class="text-[11px] text-error">
+          ⚠ Component must be letters/digits/. _ $ only, no leading/trailing dot or "..".
+        </p>
         <div class="flex gap-2">
           <button @click="newComp.action = 'disable'"
             class="flex-1 py-2 rounded-xl text-sm font-medium border transition-colors"
@@ -134,7 +140,9 @@
       </div>
       <template #actions>
         <button @click="addCompModal = false" class="px-4 py-2 text-sm font-medium text-on-surface-variant">Cancel</button>
-        <button @click="confirmAddComp" class="px-4 py-2 text-sm font-medium text-primary">Add</button>
+        <button @click="confirmAddComp"
+          :disabled="!isValidIdentifier(newComp.package) || !isValidIdentifier(newComp.component)"
+          class="px-4 py-2 text-sm font-medium text-primary disabled:opacity-40">Add</button>
       </template>
     </Modal>
 
@@ -144,6 +152,12 @@
         <InputField v-model="newAppop.package" label="Package" placeholder="com.example.app" />
         <InputField v-model="newAppop.op"      label="Op (integer or name)" placeholder="40" />
         <InputField v-model="newAppop.note"    label="Note (optional)" placeholder="op 40 = GET_USAGE_STATS" />
+        <p v-if="newAppop.package && !isValidIdentifier(newAppop.package)" class="text-[11px] text-error">
+          ⚠ Package must be letters/digits/. _ $ only, no leading/trailing dot or "..".
+        </p>
+        <p v-if="newAppop.op && !isValidOp(newAppop.op)" class="text-[11px] text-error">
+          ⚠ Op must be a non-negative integer, or a name using letters/digits/. _ $ only.
+        </p>
         <div class="grid grid-cols-2 gap-2">
           <button v-for="m in ['ignore','deny','allow','default']" :key="m"
             @click="newAppop.mode = m"
@@ -155,7 +169,9 @@
       </div>
       <template #actions>
         <button @click="addAppopModal = false" class="px-4 py-2 text-sm font-medium text-on-surface-variant">Cancel</button>
-        <button @click="confirmAddAppop" class="px-4 py-2 text-sm font-medium text-primary">Add</button>
+        <button @click="confirmAddAppop"
+          :disabled="!isValidIdentifier(newAppop.package) || !isValidOp(newAppop.op)"
+          class="px-4 py-2 text-sm font-medium text-primary disabled:opacity-40">Add</button>
       </template>
     </Modal>
 
@@ -185,6 +201,8 @@ import SearchIcon     from '@/components/icons/Search.vue'
 import CloseIcon      from '@/components/icons/Close.vue'
 import PlusIcon       from '@/components/icons/Plus.vue'
 import TrashIcon      from '@/components/icons/Trash.vue'
+import EyeIcon        from '@/components/icons/Eye.vue'
+import PlayIcon       from '@/components/icons/Play.vue'
 import InputField     from '@/components/ui/InputField.vue'
 
 const store        = useRulesStore()
@@ -206,6 +224,26 @@ const tabs = [
 
 const shortName = (s) => s.split('.').slice(-2).join('.')
 
+// Mirrors rules_engine.cpp's looks_like_valid_identifier(): letters, digits,
+// '.', '_', '$' only; no leading/trailing '.'; no "..". Anything else is
+// silently dropped by the backend, so we surface it before that happens.
+function isValidIdentifier(s) {
+  if (!s) return false
+  if (!/^[A-Za-z0-9._$]+$/.test(s)) return false
+  if (s.startsWith('.') || s.endsWith('.')) return false
+  if (s.includes('..')) return false
+  return true
+}
+
+// Mirrors rules_engine.cpp's apply_appops(): op is valid if it's a
+// non-negative integer, or a string that passes looks_like_valid_identifier.
+function isValidOp(op) {
+  const s = String(op ?? '').trim()
+  if (!s) return false
+  if (/^\d+$/.test(s)) return true
+  return isValidIdentifier(s)
+}
+
 function showToast(msg, ms = 2500) {
   toast.value = msg
   setTimeout(() => (toast.value = ''), ms)
@@ -223,7 +261,7 @@ function openAddComponent() {
   addCompModal.value = true
 }
 function confirmAddComp() {
-  if (!newComp.value.package || !newComp.value.component) return
+  if (!isValidIdentifier(newComp.value.package) || !isValidIdentifier(newComp.value.component)) return
   store.addComponent(newComp.value)
   addCompModal.value = false
 }
@@ -233,7 +271,7 @@ function openAddAppop() {
   addAppopModal.value = true
 }
 function confirmAddAppop() {
-  if (!newAppop.value.package || !newAppop.value.op) return
+  if (!isValidIdentifier(newAppop.value.package) || !isValidOp(newAppop.value.op)) return
   store.addAppop(newAppop.value)
   addAppopModal.value = false
 }

@@ -55,17 +55,20 @@ export const useGamesStore = defineStore('games', () => {
       enabled: true,
       note: g.note ?? '',
       downscale: g.downscale ?? 0.7,
-      cleanup_logs: false,
-      log_dirs: [],
+      cleanup_logs: g.cleanup_logs ?? false,
+      log_dirs: g.log_dirs ?? [],
     })
   }
 
   function removeGame(idx)  { games.value.splice(idx, 1) }
   function toggleGame(idx)  { games.value[idx].enabled = !games.value[idx].enabled }
 
+  /** Real index of a game object inside the unfiltered `games` array. */
+  function indexOf(game) { return games.value.indexOf(game) }
+
   return {
     games, loading, saving, error, searchQ, filtered,
     load, save, saveAndApply,
-    addGame, removeGame, toggleGame,
+    addGame, removeGame, toggleGame, indexOf,
   }
 })

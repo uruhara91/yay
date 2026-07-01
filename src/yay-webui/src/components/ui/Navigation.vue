@@ -1,13 +1,14 @@
 <template>
   <nav ref="navEl"
     class="fixed bottom-0 left-0 right-0 flex items-end
-           bg-surface-container/95 backdrop-blur-md shadow-lg z-50"
+           bg-surface-container/95 backdrop-blur-md shadow-lg z-50
+           md:left-0 md:top-0 md:bottom-0 md:right-auto md:w-20 md:h-full md:flex-col md:justify-center"
     :style="{
       paddingBottom: 'var(--window-inset-bottom, env(safe-area-inset-bottom, 0px))',
     }">
-    <div class="w-full h-16 flex items-center justify-around">
+    <div class="w-full h-16 flex items-center justify-around md:h-auto md:flex-col md:gap-2 md:py-6">
       <router-link v-for="item in items" :key="item.path" :to="item.path"
-        class="flex-1 flex flex-col items-center justify-center gap-1 py-1
+        class="flex-1 flex flex-col items-center justify-center gap-1 py-1 md:flex-none md:w-full
                text-xs font-medium transition-colors duration-200 no-underline"
         :class="active(item) ? 'text-on-surface' : 'text-on-surface-variant'">
         <div class="h-8 flex items-center justify-center rounded-full px-4 transition-all duration-200"
@@ -21,22 +22,24 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute } from 'vue-router'
-import IconHome     from '@/components/icons/Home.vue'
-import IconRules    from '@/components/icons/Rules.vue'
-import IconGame     from '@/components/icons/Game.vue'
-import IconLog      from '@/components/icons/Log.vue'
+import IconHome from '@/components/icons/Home.vue'
+import IconRules from '@/components/icons/Rules.vue'
+import IconGame from '@/components/icons/Game.vue'
+import IconIo from '@/components/icons/Io.vue'
+import IconLog from '@/components/icons/Log.vue'
 
 const route = useRoute()
 const navEl = ref(null)
 let ro = null
 
 const items = [
-  { path: '/',       label: 'Home',     icon: IconHome  },
-  { path: '/rules',  label: 'Rules',    icon: IconRules },
-  { path: '/games',  label: 'Games',    icon: IconGame  },
-  { path: '/log',    label: 'Log',      icon: IconLog   },
+  { path: '/', label: 'Home', icon: IconHome },
+  { path: '/rules', label: 'Rules', icon: IconRules },
+  { path: '/games', label: 'Games', icon: IconGame },
+  { path: '/io', label: 'I/O', icon: IconIo },
+  { path: '/log', label: 'Log', icon: IconLog },
 ]
 
 const active = (item) =>

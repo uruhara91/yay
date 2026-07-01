@@ -1,70 +1,262 @@
 /**
- * Dual bridge: KernelSU WebUI (ksu.exec) + MMRL / WebUI X ($EnFile + webuix)
- * Falls back gracefully in browser for dev.
+ * Dual bridge: KernelSU WebUI + MMRL / WebUI X.
+ *
+ * Uses the official `kernelsu` and `webuix` npm packages (same approach as
+ * Encore) rather than touching `window.ksu` / `window.webui` directly —
+ * those packages already guard against the global being undefined and
+ * expose a typed, promise-based API.
+ *
+ * WebUI X's file interface name is NOT a fixed global. Per MMRL's docs, a
+ * module's own JS interfaces are exposed as `window.$<sanitizedModId>`
+ * (fully deterministic — e.g. `yay` -> `window.$yay`), but its *file*
+ * interface uses a short, host-assigned prefix (Encore -> `$EnFile`,
+ * bindhosts -> `$BiFile`) that isn't derivable from modId by any documented
+ * rule. So instead of guessing a prefix, we scan `window` for the
+ * `$<Xx>File` pattern at runtime — exactly what `webuix`'s own internal
+ * `WXClass` helper does — which works regardless of what prefix this
+ * install happens to assign.
+ *
+ * Falls back to an in-memory mock when opened outside both bridges (e.g.
+ * `vite dev` in a plain browser tab), so the whole UI stays clickable/
+ * demoable without a rooted device.
  */
 
-// ── Runtime detection ──────────────────────────────────────────────────────
-export const isKSU   = () => typeof ksu !== 'undefined'
-export const isMMRL  = () => typeof $EnFile !== 'undefined'
-export const isLive  = () => isKSU() || isMMRL()
+import { exec as ksuExec, toast as ksuToast } from 'kernelsu'
+import { Intent, WebUI, WXEventHandler } from 'webuix'
+import { mockFs, mockDelay } from './devMock'
 
-// ── exec (KSU only; MMRL uses file ops) ───────────────────────────────────
+const MOD_ID = 'yay'
+
+// ── Runtime detection ───────────────────────────────────────────────────────
+
+/** True when running inside KernelSU's (or a KSU-compatible) WebUI. */
+export const isKSU = () => typeof window !== 'undefined' && typeof window.ksu !== 'undefined'
+
+/**
+ * True when running inside MMRL's WebUI X, detected via this module's own
+ * scoped interface (`window.$yay`) — the one thing that's guaranteed to
+ * exist under our exact module id, per MMRL's sanitizedModId contract.
+ */
+export const isWebUIX = () =>
+  typeof window !== 'undefined' &&
+  typeof window[`$${MOD_ID}`] !== 'undefined' &&
+  Object.keys(window[`$${MOD_ID}`] ?? {}).length > 0
+
+export const isLive = () => isKSU() || isWebUIX()
+
+/** Human-readable bridge name for a small debug/status line in Settings. */
+export function bridgeName() {
+  if (isWebUIX()) return 'MMRL (WebUI X)'
+  if (isKSU()) return 'KernelSU'
+  return 'Browser (dev)'
+}
+
+// ── WebUI X file interface discovery ────────────────────────────────────────
+// Mirrors webuix's own WXClass: find whichever `window.$XxFile` key exists,
+// rather than assuming a specific prefix. Cached after first successful scan
+// since the interface can't change mid-session.
+let _fileInterfaceCache
+function findFileInterface() {
+  if (_fileInterfaceCache !== undefined) return _fileInterfaceCache
+  if (typeof window === 'undefined') return (_fileInterfaceCache = null)
+
+  const key = Object.keys(window).find((k) => /^\$\w{2}File$/.test(k))
+  _fileInterfaceCache = key ? window[key] : null
+  return _fileInterfaceCache
+}
+
+// ── exec ─────────────────────────────────────────────────────────────────
+/**
+ * Runs a shell command as root. Works when either bridge exposes a
+ * KSU-compatible `window.ksu.exec` (true for KernelSU WebUI, and also true
+ * for some MMRL WebView configurations) — falls back to a dev mock
+ * otherwise so nothing throws outside a module context.
+ */
 export async function exec(cmd) {
   if (isKSU()) {
-    return new Promise((resolve) => {
-      ksu.exec(cmd, '', (errno, stdout, stderr) =>
-        resolve({ errno, stdout: stdout ?? '', stderr: stderr ?? '' })
-      )
-    })
+    try {
+      const { errno, stdout, stderr } = await ksuExec(cmd)
+      return { errno, stdout: stdout ?? '', stderr: stderr ?? '' }
+    } catch (e) {
+      return { errno: -1, stdout: '', stderr: String(e?.message ?? e) }
+    }
   }
-  // Dev fallback
-  console.debug('[bridge] exec:', cmd)
+
+  console.debug('[bridge:dev] exec:', cmd)
+  await mockDelay()
   return { errno: 0, stdout: '', stderr: '' }
 }
 
-// ── File I/O ───────────────────────────────────────────────────────────────
-export async function readFile(path) {
-  if (isMMRL() && $EnFile.exist(path)) {
-    return $EnFile.read(path)
-  }
+/** Best-effort toast; silently does nothing outside KSU/dev. */
+export function toast(message) {
   if (isKSU()) {
-    const { errno, stdout, stderr } = await exec(`[ -f "${path}" ] && cat "${path}"`)
-    if (errno !== 0) throw new Error(`readFile: ${stderr}`)
-    return stdout
+    try {
+      ksuToast(message)
+      return
+    } catch (e) {
+      console.warn('[bridge] toast failed:', e)
+    }
   }
-  throw new Error('readFile: not running in KSU/MMRL')
+  console.debug('[bridge:dev] toast:', message)
+}
+
+/** Base64 helpers used to move file content across the exec boundary safely. */
+function toBase64(str) {
+  return btoa(unescape(encodeURIComponent(str)))
+}
+function fromBase64(b64) {
+  return decodeURIComponent(escape(atob(b64)))
+}
+
+// ── File I/O ──────────────────────────────────────────────────────────────
+export async function readFile(path) {
+  const fi = findFileInterface()
+  if (fi) {
+    if (!fi.exists(path)) throw new Error(`readFile: not found: ${path}`)
+    const content = fi.read(path)
+    if (content === null) throw new Error(`readFile: failed to read: ${path}`)
+    return content
+  }
+
+  if (isKSU()) {
+    // base64 round-trip avoids any shell-quoting corruption on read.
+    const { errno, stdout, stderr } = await exec(
+      `[ -f "${path}" ] && base64 -w0 "${path}" || exit 3`,
+    )
+    if (errno !== 0) throw new Error(`readFile: not found: ${path}${stderr ? ` (${stderr})` : ''}`)
+    try {
+      return fromBase64(stdout.trim())
+    } catch {
+      const raw = await exec(`cat "${path}"`)
+      if (raw.errno !== 0) throw new Error(`readFile: ${raw.stderr}`)
+      return raw.stdout
+    }
+  }
+
+  return mockFs.read(path)
 }
 
 export async function writeFile(path, content) {
-  if (isMMRL()) {
-    $EnFile.write(path, content)
+  const fi = findFileInterface()
+  if (fi) {
+    fi.write(path, content)
     return
   }
+
   if (isKSU()) {
-    const escaped = content.replace(/'/g, "'\\''")
-    const { errno, stderr } = await exec(`printf '%s' '${escaped}' > "${path}"`)
+    const dir = path.slice(0, path.lastIndexOf('/'))
+    const b64 = toBase64(content)
+    // mkdir -p defensively, then decode base64 back into place — avoids all
+    // shell-quoting pitfalls for JSON containing quotes/newlines/backslashes.
+    const { errno, stderr } = await exec(
+      `mkdir -p "${dir}" 2>/dev/null; echo '${b64}' | base64 -d > "${path}"`,
+    )
     if (errno !== 0) throw new Error(`writeFile: ${stderr}`)
     return
   }
-  throw new Error('writeFile: not running in KSU/MMRL')
+
+  return mockFs.write(path, content)
 }
 
 export async function fileExists(path) {
-  if (isMMRL()) return $EnFile.exist(path)
+  const fi = findFileInterface()
+  if (fi) return fi.exists(path)
+
   if (isKSU()) {
     const { errno } = await exec(`[ -f "${path}" ]`)
     return errno === 0
   }
-  return false
+
+  return mockFs.exists(path)
 }
 
-// ── yay-specific helpers ───────────────────────────────────────────────────
-const CONFIG = '/data/adb/yay/config'
-const LOG    = '/data/adb/yay/run.log'
-const LOG1   = '/data/adb/yay/run.log.1'
-const BIN    = '/data/adb/modules/yay/bin/yay_apply'
+/**
+ * Open a URL in the external browser. Prefers WebUI X's native Intent API
+ * when available, falls back to `am start` via exec, then a plain
+ * `window.open` in dev.
+ */
+export async function openWebsite(link) {
+  if (isWebUIX()) {
+    try {
+      const webui = new WebUI()
+      const intent = new Intent(Intent.ACTION_VIEW)
+      intent.setData(link)
+      webui.startActivity(intent)
+      return
+    } catch (e) {
+      console.error('[bridge] openWebsite via WebUI X failed:', e)
+    }
+  }
+  if (isKSU()) {
+    const { errno } = await exec(`am start -a android.intent.action.VIEW -d "${link}"`)
+    if (errno === 0) return
+  }
+  if (typeof window !== 'undefined') window.open(link, '_blank')
+}
 
-export const PATHS = { CONFIG, LOG, LOG1, BIN }
+/**
+ * List installed 3rd-party packages, for the "add game/app" pickers.
+ * Returns [{ packageName }] — label is resolved lazily per-row via
+ * getAppLabel, since batch label lookup differs a lot bridge-to-bridge.
+ */
+export async function listApps() {
+  if (isKSU() && typeof window.ksu.listUserPackages === 'function') {
+    try {
+      return JSON.parse(window.ksu.listUserPackages()).map((packageName) => ({ packageName }))
+    } catch (e) {
+      console.error('[bridge] listUserPackages failed:', e)
+    }
+  }
+
+  const { errno, stdout, stderr } = await exec('pm list packages -3')
+  if (errno !== 0) throw new Error(`listApps: ${stderr}`)
+  return stdout
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l.startsWith('package:'))
+    .map((l) => ({ packageName: l.slice(8).trim() }))
+    .filter((p) => p.packageName)
+}
+
+/** Best-effort app label lookup; falls back to the package name. */
+export async function getAppLabel(packageName) {
+  try {
+    if (isKSU() && typeof window.ksu.getPackagesInfo === 'function') {
+      const result = JSON.parse(window.ksu.getPackagesInfo(JSON.stringify([packageName])))
+      if (result?.[0] && !result[0].error) return result[0].appLabel || packageName
+    }
+  } catch (e) {
+    console.warn('[bridge] getAppLabel failed for', packageName, e)
+  }
+  return packageName
+}
+
+/**
+ * Registers a hardware/gesture back handler via WebUI X's WXEventHandler.
+ * No-op (returns a no-op unsubscribe) outside WebUI X.
+ * @param {() => void} onBack
+ * @returns {() => void} unsubscribe
+ */
+export function onHardwareBack(onBack) {
+  if (!isWebUIX() || typeof window === 'undefined') return () => {}
+  try {
+    const handler = new WXEventHandler()
+    return handler.on(window, 'back', onBack)
+  } catch (e) {
+    console.debug('[bridge] WXEventHandler back listener not available:', e)
+    return () => {}
+  }
+}
+
+// ── yay-specific helpers ────────────────────────────────────────────────────
+const CONFIG = '/data/adb/yay/config'
+const LOG = '/data/adb/yay/run.log'
+const LOG1 = '/data/adb/yay/run.log.1'
+const BIN = '/data/adb/modules/yay/bin/yay_apply'
+const CACHE = '/data/adb/yay/cache/rules.hash'
+const WATCH_FLAG = '/data/adb/modules/yay/enable_watch'
+
+export const PATHS = { CONFIG, LOG, LOG1, BIN, CACHE, WATCH_FLAG }
 
 export async function readConfig(name) {
   const raw = await readFile(`${CONFIG}/${name}`)
@@ -92,14 +284,39 @@ export async function applyFull() {
 }
 
 export async function dryRunRules() {
-  const { errno, stdout, stderr } = await exec(`${BIN} --rules --dry-run 2>&1 || true`)
+  const { stdout, stderr } = await exec(`${BIN} --rules --dry-run 2>&1`)
   return stdout || stderr
 }
 
 export async function readLog() {
-  try { return await readFile(LOG) } catch { return '' }
+  try {
+    return await readFile(LOG)
+  } catch {
+    return ''
+  }
 }
 
 export async function readPrevLog() {
-  try { return await readFile(LOG1) } catch { return '' }
+  try {
+    return await readFile(LOG1)
+  } catch {
+    return ''
+  }
+}
+
+/** Whether the inotify watcher is enabled (presence of a flag file). */
+export async function isWatcherEnabled() {
+  try {
+    return await fileExists(WATCH_FLAG)
+  } catch {
+    return false
+  }
+}
+
+export async function setWatcherEnabled(enabled) {
+  if (enabled) {
+    await writeFile(WATCH_FLAG, '')
+  } else {
+    await exec(`rm -f "${WATCH_FLAG}"`)
+  }
 }

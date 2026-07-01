@@ -7,9 +7,7 @@
           <button @click="store.load()" title="Refresh"
             class="w-9 h-9 rounded-full bg-surface-container flex items-center justify-center
                    text-on-surface-variant active:bg-surface-container-high transition-colors">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M17.65 6.35A7.958 7.958 0 0012 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0112 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
-            </svg>
+            <RefreshIcon />
           </button>
         </div>
         <!-- Tab -->
@@ -63,6 +61,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useLogStore } from '@/stores/log'
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue'
+import RefreshIcon from '@/components/icons/Refresh.vue'
 
 const store = useLogStore()
 const activeFilter = ref('')
@@ -82,17 +81,25 @@ const allLines = computed(() =>
   logText.value ? logText.value.split('\n').filter(Boolean) : []
 )
 
+// Matches yay_apply's logger.cpp format exactly:
+// [MM-DD HH:MM:SS X file.cpp:123] message
+const LEVEL_RE = /^\[\d{2}-\d{2} \d{2}:\d{2}:\d{2} ([EWID?]) /
+
+function lineLevel(line) {
+  return line.match(LEVEL_RE)?.[1] ?? null
+}
+
 const filteredLines = computed(() => {
   if (!activeFilter.value) return allLines.value
-  const f = activeFilter.value
-  return allLines.value.filter(l => l.includes(` ${f} `))
+  return allLines.value.filter((l) => lineLevel(l) === activeFilter.value)
 })
 
 function lineClass(line) {
-  if (line.includes(' E ')) return 'text-error'
-  if (line.includes(' W ')) return 'text-yellow-400'
-  if (line.includes(' I ')) return 'text-on-surface'
-  if (line.includes(' D ')) return 'text-on-surface-variant'
+  const level = lineLevel(line)
+  if (level === 'E') return 'text-error'
+  if (level === 'W') return 'text-yellow-400'
+  if (level === 'I') return 'text-on-surface'
+  if (level === 'D') return 'text-on-surface-variant'
   return 'text-on-surface-variant'
 }
 

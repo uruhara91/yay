@@ -33,6 +33,9 @@ jobs:
         with:
           packages: "platform-tools ndk;${{ inputs.ndk_version }}"
 
+      - name: Bun Setup
+        uses: oven-sh/setup-bun@v2
+
       - name: Point build.sh at the installed NDK
         run: |
           echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/${{ inputs.ndk_version }}" >> "$GITHUB_ENV"
@@ -50,6 +53,14 @@ jobs:
             [ -s "$bin" ] || { echo "::error::$bin is missing or empty"; exit 1; }
             file "$bin" | grep -q "ARM aarch64" || { echo "::error::$bin is not ARM64"; exit 1; }
           done
+
+      - name: Build WebUI
+        working-directory: src/yay-webui
+        run: |
+          bun install
+          bun run build
+          mkdir -p ../../webroot
+          cp -r ./dist/* ../../webroot/
 
       - name: Read module version
         id: ver
@@ -70,6 +81,7 @@ jobs:
           cp -r bin "$stage/"
           cp -r config "$stage/"
           cp -r META-INF "$stage/"
+          cp -r webroot "$stage/"
           cp module.prop "$stage/"
           cp customize.sh "$stage/"
           cp post-fs-data.sh "$stage/"

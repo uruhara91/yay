@@ -25,13 +25,15 @@
     <div class="scrollbar-hidden pb-safe-nav flex-1 min-h-0 overflow-y-auto">
       <div class="max-w-2xl mx-auto px-5 py-2">
         <LoadingSpinner v-if="store.loading" />
+        <div v-else-if="store.error" class="text-error text-sm py-4 text-center">{{ store.error }}</div>
         <div v-else class="space-y-1.5">
-          <div v-for="(g, i) in store.filtered" :key="i" class="md3-list">
-            <Ripple @click="openEdit(i)" class="md3-list-item w-full">
+          <div v-for="g in store.filtered" :key="g.package + g.note" class="md3-list">
+            <Ripple @click="openEdit(store.indexOf(g))" class="md3-list-item w-full">
               <div class="flex items-center gap-3 px-4 py-3">
                 <ToggleSwitch :modelValue="g.enabled"
-                  @update:modelValue.stop="store.toggleGame(i)"
-                  @click.stop class="shrink-0" />
+                  @update:modelValue="store.toggleGame(store.indexOf(g))"
+                  @click.stop
+                  @pointerdown.stop class="shrink-0" />
                 <div class="flex-1 min-w-0">
                   <p class="text-sm font-medium text-on-surface truncate">{{ g.note || g.package }}</p>
                   <p class="text-xs text-on-surface-variant truncate">{{ g.package }}</p>
@@ -89,13 +91,22 @@
             class="w-full bg-surface-container-high rounded-xl px-3 py-2.5 text-xs
                    text-on-surface font-mono placeholder-on-surface-variant/50
                    border border-transparent focus:border-primary outline-none resize-none" />
+          <p class="text-[11px] text-on-surface-variant mt-1">
+            Must be under <code class="font-mono">Android/data/&lt;package&gt;/…</code> or
+            <code class="font-mono">Android/obb/&lt;package&gt;/…</code> — anything else is silently
+            rejected by the backend for safety.
+          </p>
+          <p v-if="unsafeLogDirs.length" class="text-[11px] text-error mt-1">
+            ⚠ Won't be purged (outside allowed scope): {{ unsafeLogDirs.join(', ') }}
+          </p>
         </div>
       </div>
       <template #actions>
         <button v-if="editIdx !== null" @click="removeAndClose"
           class="px-4 py-2 text-sm font-medium text-error mr-auto">Delete</button>
         <button @click="editModal = false" class="px-4 py-2 text-sm font-medium text-on-surface-variant">Cancel</button>
-        <button @click="confirmEdit" class="px-4 py-2 text-sm font-medium text-primary">
+        <button @click="confirmEdit" :disabled="!form.package.trim()"
+          class="px-4 py-2 text-sm font-medium text-primary disabled:opacity-40">
           {{ editIdx === null ? 'Add' : 'Save' }}
         </button>
       </template>
@@ -106,7 +117,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useGamesStore } from '@/stores/games'
 import Ripple        from '@/components/ui/Ripple.vue'
 import ToggleSwitch  from '@/components/ui/ToggleSwitch.vue'
@@ -124,6 +135,28 @@ const editModal = ref(false)
 const editIdx   = ref(null)
 const toast     = ref('')
 const form      = reactive({ package: '', note: '', downscale: 0.7, cleanup_logs: false, logDirsRaw: '' })
+
+// Mirrors game_mode.cpp's is_safe_purge_target(): path must sit under one of
+// the two allowed roots, scoped to the game's own package, no ".." traversal,
+// and at least one path segment past the package name.
+const ALLOWED_ROOTS = ['/data/media/0/Android/data/', '/data/media/0/Android/obb/']
+function isSafePurgeTarget(path, pkg) {
+  if (!path || path[0] !== '/' || path.includes('..')) return false
+  const root = ALLOWED_ROOTS.find((r) => path.startsWith(r))
+  if (!root) return false
+  const remainder = path.slice(root.length)
+  if (!pkg || !remainder.startsWith(`${pkg}/`)) return false
+  return remainder.length > pkg.length + 1
+}
+
+const unsafeLogDirs = computed(() => {
+  if (!form.cleanup_logs) return []
+  return form.logDirsRaw
+    .split('\n')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .filter((p) => !isSafePurgeTarget(p, form.package.trim()))
+})
 
 function showToast(msg) { toast.value = msg; setTimeout(() => (toast.value = ''), 2500) }
 onMounted(() => store.load())
@@ -146,8 +179,9 @@ function openEdit(i) {
 }
 
 function confirmEdit() {
+  if (!form.package.trim()) return
   const log_dirs = form.logDirsRaw.split('\n').map(s => s.trim()).filter(Boolean)
-  const data = { package: form.package, note: form.note, enabled: true,
+  const data = { package: form.package.trim(), note: form.note, enabled: true,
     downscale: form.downscale, cleanup_logs: form.cleanup_logs, log_dirs }
   if (editIdx.value === null) {
     store.addGame(data)
