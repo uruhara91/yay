@@ -216,6 +216,15 @@ pid_t spawn_one(
     }
 
     if (pid == 0) {
+        // Redirect stdin to /dev/null — cmd package/appops doesn't read
+        // stdin, but leaving it open to whatever the parent had is sloppy
+        // and could matter if a future command does.
+        // stdout/stderr go to the pipe so the parent can capture output.
+        int devnull = ::open("/dev/null", O_RDONLY | O_CLOEXEC);
+        if (devnull >= 0) {
+            static_cast<void>(::dup2(devnull, STDIN_FILENO));
+            if (devnull > STDERR_FILENO) ::close(devnull);
+        }
         static_cast<void>(::dup2(write_fd.get(), STDOUT_FILENO));
         static_cast<void>(::dup2(write_fd.get(), STDERR_FILENO));
         read_fd.reset();
@@ -426,17 +435,21 @@ std::vector<ExecResult> exec_batch(
 
         try_start_next();
 
+        // Reuse pfds across iterations to avoid per-poll heap allocation.
+        // Sized to concurrency on entry; resize() each iteration since
+        // in_flight shrinks as children finish.
+        std::vector<struct pollfd> pfds;
+        pfds.reserve(concurrency);
+
         while (!in_flight.empty()) {
             if (std::chrono::steady_clock::now() >= batch_deadline) {
                 budget_exceeded = true;
                 break;
             }
 
-            std::vector<struct pollfd> pfds;
-            pfds.reserve(in_flight.size());
-            for (auto& child : in_flight) {
-                pfds.push_back(
-                    {child.read_fd.get(), POLLIN, 0});
+            pfds.resize(in_flight.size());
+            for (size_t i = 0; i < in_flight.size(); ++i) {
+                pfds[i] = {in_flight[i].read_fd.get(), POLLIN, 0};
             }
 
             const int ret = ::poll(
