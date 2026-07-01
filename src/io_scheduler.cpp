@@ -79,7 +79,24 @@ static bool try_write_scheduler(const std::string& qdir, const std::string& sche
     std::string sched_path = qdir + "/scheduler";
     std::string available  = sysfs_read(sched_path.c_str());
     if (available.empty()) return false;
-    if (available.find(sched) == std::string::npos) return false;
+
+    // The available-schedulers string looks like "mq-deadline [kyber] cfq".
+    // A naive substring search for "deadline" would match inside "mq-deadline"
+    // and waste a sysfs write that the kernel will reject. Check that the
+    // scheduler name is surrounded by word delimiters (space, '[', ']') or
+    // sits at the string boundary so "deadline" only matches when it is
+    // actually present as its own entry, not as a suffix of another name.
+    const auto pos = available.find(sched);
+    if (pos == std::string::npos) return false;
+    const bool start_ok = (pos == 0) ||
+                          (available[pos - 1] == ' ') ||
+                          (available[pos - 1] == '[');
+    const size_t end = pos + sched.size();
+    const bool end_ok = (end == available.size()) ||
+                        (available[end] == ' ') ||
+                        (available[end] == ']');
+    if (!start_ok || !end_ok) return false;
+
     return sysfs_write(sched_path.c_str(), sched.c_str());
 }
 

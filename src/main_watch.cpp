@@ -44,6 +44,17 @@ static void spawn_apply(const char* mode) {
     }
     if (pid == 0) {
         setsid();
+        // Close stdin and redirect stdout/stderr to /dev/null so the
+        // child does not inherit the watcher's log fd. yay_apply opens
+        // its own log via Logger::init — inheriting our fd would cause
+        // interleaved, non-atomic writes to run.log from two processes.
+        int devnull = open("/dev/null", O_RDWR | O_CLOEXEC);
+        if (devnull >= 0) {
+            dup2(devnull, STDIN_FILENO);
+            dup2(devnull, STDOUT_FILENO);
+            dup2(devnull, STDERR_FILENO);
+            if (devnull > STDERR_FILENO) close(devnull);
+        }
         execl(YAY_APPLY, YAY_APPLY, mode, nullptr);
         _exit(127);
     }
@@ -101,8 +112,14 @@ int main(int /*argc*/, char* /*argv*/[]) {
         return 1;
     }
 
+    // Buffer for inotify events. A single read() can return multiple events;
+    // the kernel coalesces bursts. One event slot (sizeof header + NAME_MAX)
+    // is only enough for a single event — with two files saved in quick
+    // succession the second event would silently be dropped from that read().
+    // 64 slots is far more than we will ever see in one burst but still tiny
+    // in absolute terms (~4 KB on most systems).
     alignas(struct inotify_event)
-    char buf[sizeof(struct inotify_event) + NAME_MAX + 1];
+    char buf[64 * (sizeof(struct inotify_event) + NAME_MAX + 1)];
 
     struct pollfd pfd{ifd, POLLIN, 0};
 

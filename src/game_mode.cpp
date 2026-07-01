@@ -208,6 +208,10 @@ GameResult apply_game_mode(const Json& cfg) {
             double factor = game["downscale"].get<double>();
             if (factor > 0.0 && factor <= 1.0) {
                 char fs[16];
+                // %g strips trailing zeros: 0.7 -> "0.7", 0.65 -> "0.65",
+                // 1.0 -> "1". %.2f was wrong — Android rejects "0.70".
+                // For values in (0,1] %g never produces scientific notation,
+                // but guard anyway just in case.
                 snprintf(fs, sizeof(fs), "%g", factor);
                 if (fs[0] == '\0' || strchr(fs, 'e') != nullptr || strchr(fs, 'E') != nullptr) {
                     Logger::warn("game_mode: skipping downscale for " + pkg +
@@ -215,12 +219,12 @@ GameResult apply_game_mode(const Json& cfg) {
                     res.failed++;
                     continue;
                 }
-        
                 auto r = exec_cmd({"cmd", "game", "downscale", fs, pkg});
                 if (r.ok()) {
                     Logger::info("game_mode: " + pkg + " downscale=" + fs);
                     res.downscale_set++;
                 } else {
+                    // Trim trailing whitespace from stdout for a clean log line.
                     std::string out = r.stdout_str;
                     while (!out.empty() &&
                            (out.back() == '\n' || out.back() == '\r' ||
