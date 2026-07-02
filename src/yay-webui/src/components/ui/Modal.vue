@@ -1,7 +1,7 @@
 <template>
   <Transition name="modal">
     <div v-if="show"
-      class="fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center"
+      class="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 sm:items-center"
       @click="closeOnOutsideClick && $emit('close')">
       <div class="bg-surface rounded-t-3xl sm:rounded-2xl w-full max-w-md max-h-[85vh]
                   flex flex-col overflow-hidden shadow-xl mx-0 sm:mx-4 modal-container"
