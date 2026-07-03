@@ -19,11 +19,10 @@ fi
 # Backgrounded + delayed well past boot_completed.
 # Not persisted anywhere by us — this only pokes a runtime kernel node.
 # So a reboot (or module removal) alone reverts it to stock.
-(
-    sleep 60
-    [ -w /proc/eem/EEM_DET_B/eem_offset ]   && echo "-6" > /proc/eem/EEM_DET_B/eem_offset   2>/dev/null
-    [ -w /proc/eem/EEM_DET_L/eem_offset ]   && echo "-6" > /proc/eem/EEM_DET_L/eem_offset   2>/dev/null
-    [ -w /proc/eem/EEM_DET_CCI/eem_offset ] && echo "-6" > /proc/eem/EEM_DET_CCI/eem_offset 2>/dev/null
-) &
-
+#(
+#    sleep 60
+#    [ -w /proc/eem/EEM_DET_B/eem_offset ]   && echo "-5" > /proc/eem/EEM_DET_B/eem_offset   2>/dev/null
+#    [ -w /proc/eem/EEM_DET_L/eem_offset ]   && echo "-5" > /proc/eem/EEM_DET_L/eem_offset   2>/dev/null
+#) &
+#
 exit 0
