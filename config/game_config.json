@@ -1,5 +1,5 @@
 {
-  "_comment": "yay game mode config. downscale: 0.0-1.0 (1.0 = native res). cleanup_logs: purge log dirs periodically.",
+  "_comment": "yay game mode config. downscale: 0.0-1.0 (1.0 = native res).",
   "version": 1,
   "games": [
     {
@@ -26,6 +26,14 @@
       "package": "com.voodoo.almanac",
       "enabled": true,
       "note": "Almanac",
+      "downscale": 0.7,
+      "cleanup_logs": false,
+      "log_dirs": []
+    },
+    {
+      "package": "com.supercell.clashofclans",
+      "enabled": true,
+      "note": "Clash of Clans",
       "downscale": 0.7,
       "cleanup_logs": false,
       "log_dirs": []
