@@ -38,8 +38,9 @@
                   <p class="text-sm font-medium text-on-surface truncate">{{ g.note || g.package }}</p>
                   <p class="text-xs text-on-surface-variant truncate">{{ g.package }}</p>
                   <div class="flex gap-2 mt-1 flex-wrap">
-                    <span class="text-[10px] px-1.5 py-0.5 rounded-sm bg-primary/15 text-primary font-semibold">
-                      ×{{ g.downscale }}
+                    <span class="text-[10px] px-1.5 py-0.5 rounded-sm font-semibold"
+                      :class="downscaleBadgeClass(g.downscale)">
+                      {{ downscaleBadgeText(g.downscale) }}
                     </span>
                     <span v-if="g.cleanup_logs" class="text-[10px] px-1.5 py-0.5 rounded-sm bg-surface-container-high text-on-surface-variant font-semibold">
                       LOG CLEAN
@@ -69,12 +70,25 @@
         <InputField v-model="form.package" label="Package name" placeholder="com.example.game" />
         <InputField v-model="form.note"    label="Display name (optional)" placeholder="My Game" />
         <div>
-          <label class="block text-xs text-on-surface-variant mb-1">Downscale (0.1 – 1.0)</label>
-          <div class="flex items-center gap-3">
-            <input type="range" min="0.1" max="1.0" step="0.05" v-model.number="form.downscale"
-              class="flex-1 accent-primary" />
-            <span class="text-sm font-mono text-on-surface w-10 text-right">{{ form.downscale }}</span>
+          <label class="block text-xs text-on-surface-variant mb-1">Downscale</label>
+          <div class="grid grid-cols-3 gap-2">
+            <button v-for="opt in downscaleOptions" :key="opt.value"
+              @click="form.downscale = opt.value"
+              class="py-2 rounded-xl text-sm font-medium border transition-colors"
+              :class="form.downscale === opt.value
+                ? (opt.value === 'disable' ? 'bg-error/15 border-error text-error' : 'bg-primary/15 border-primary text-primary')
+                : 'border-outline-variant text-on-surface-variant'">
+              {{ opt.label }}
+            </button>
           </div>
+          <p class="text-[11px] text-on-surface-variant mt-1.5">
+            Only values Android's <code class="font-mono">cmd game downscale</code> shell command
+            actually recognizes — anything else is silently ignored system-side.
+          </p>
+          <p v-if="isOffGridDownscale" class="text-[11px] text-error mt-1">
+            ⚠ Current value ({{ form.downscale }}) isn't one of the recognized options above and
+            was never actually being applied — pick one to fix it.
+          </p>
         </div>
         <div class="flex items-center justify-between bg-surface-container-high rounded-xl px-3 py-2.5">
           <div>
@@ -136,6 +150,20 @@ const editIdx   = ref(null)
 const toast     = ref('')
 const form      = reactive({ package: '', note: '', downscale: 0.7, cleanup_logs: false, logDirsRaw: '' })
 
+// Exactly what `cmd game downscale` (the legacy GameManager shell command
+// this backend uses) recognizes — see AOSP's GameManagerShellCommand.java.
+// Any other value is silently ignored by Android, so the picker only ever
+// offers these six.
+const downscaleOptions = [
+  { value: 0.5, label: '0.5' },
+  { value: 0.6, label: '0.6' },
+  { value: 0.7, label: '0.7' },
+  { value: 0.8, label: '0.8' },
+  { value: 0.9, label: '0.9' },
+  { value: 'disable', label: 'Disable' },
+]
+const VALID_DOWNSCALE_VALUES = new Set([0.5, 0.6, 0.7, 0.8, 0.9])
+
 // Mirrors game_mode.cpp's is_safe_purge_target(): path must sit under one of
 // the two allowed roots, scoped to the game's own package, no ".." traversal,
 // and at least one path segment past the package name.
@@ -149,6 +177,12 @@ function isSafePurgeTarget(path, pkg) {
   return remainder.length > pkg.length + 1
 }
 
+const isOffGridDownscale = computed(() => {
+  const d = form.downscale
+  if (d === 'disable' || d === undefined || d === null || d === '') return false
+  return !VALID_DOWNSCALE_VALUES.has(d)
+})
+
 const unsafeLogDirs = computed(() => {
   if (!form.cleanup_logs) return []
   return form.logDirsRaw
@@ -157,6 +191,23 @@ const unsafeLogDirs = computed(() => {
     .filter(Boolean)
     .filter((p) => !isSafePurgeTarget(p, form.package.trim()))
 })
+
+function downscaleBadgeText(d) {
+  if (d === 'disable') return 'downscale off'
+  if (typeof d === 'number' && VALID_DOWNSCALE_VALUES.has(d)) return `×${d}`
+  if (d === undefined || d === null) return 'not set'
+  return `×${d} ⚠`
+}
+
+function downscaleBadgeClass(d) {
+  if (d === 'disable') return 'bg-surface-container-high text-on-surface-variant'
+  if (typeof d === 'number' && VALID_DOWNSCALE_VALUES.has(d)) return 'bg-primary/15 text-primary'
+  if (d === undefined || d === null) return 'bg-surface-container-high text-on-surface-variant'
+  // Off-grid value (e.g. 0.65 from before this validation existed, or a
+  // hand-edited config file) — Android silently ignores it, so flag it
+  // rather than implying it's actually in effect.
+  return 'bg-error/15 text-error'
+}
 
 function showToast(msg) { toast.value = msg; setTimeout(() => (toast.value = ''), 2500) }
 onMounted(() => store.load())

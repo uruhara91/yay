@@ -320,3 +320,87 @@ export async function setWatcherEnabled(enabled) {
     await exec(`rm -f "${WATCH_FLAG}"`)
   }
 }
+
+// ── yay_inspect: on-demand component/appops browser ────────────────────────
+// Backs the "Add component" / "Add appops override" pickers so the person
+// doesn't have to manually dumpsys+grep over a terminal. Both read-only,
+// invoked lazily (only when a picker modal opens), never during boot apply.
+const INSPECT_BIN = '/data/adb/modules/yay/bin/yay_inspect'
+
+// Basic Android package-name shape check before it ever reaches a shell
+// command — not a security boundary (exec_util on the native side doesn't
+// interpolate through a shell for this arg either), just a fast client-side
+// guard against obviously-wrong input before spawning a process for it.
+const PACKAGE_RE = /^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$/
+
+export async function inspectComponents(packageName) {
+  if (!PACKAGE_RE.test(packageName)) {
+    throw new Error(`invalid package name: ${packageName}`)
+  }
+
+  if (!isLive()) {
+    await mockDelay()
+    return mockInspectComponents(packageName)
+  }
+
+  const { errno, stdout, stderr } = await exec(`${INSPECT_BIN} --components "${packageName}"`)
+  if (errno !== 0) throw new Error(`inspectComponents: ${stderr || 'yay_inspect failed'}`)
+
+  let parsed
+  try {
+    parsed = JSON.parse(stdout)
+  } catch {
+    throw new Error('inspectComponents: could not parse yay_inspect output')
+  }
+  if (parsed.error) throw new Error(parsed.error)
+  return parsed.components ?? []
+}
+
+export async function inspectAppops(packageName = '') {
+  if (packageName && !PACKAGE_RE.test(packageName)) {
+    throw new Error(`invalid package name: ${packageName}`)
+  }
+
+  if (!isLive()) {
+    await mockDelay()
+    return mockInspectAppops()
+  }
+
+  const cmd = packageName
+    ? `${INSPECT_BIN} --appops "${packageName}"`
+    : `${INSPECT_BIN} --appops`
+  const { errno, stdout, stderr } = await exec(cmd)
+  if (errno !== 0) throw new Error(`inspectAppops: ${stderr || 'yay_inspect failed'}`)
+
+  let parsed
+  try {
+    parsed = JSON.parse(stdout)
+  } catch {
+    throw new Error('inspectAppops: could not parse yay_inspect output')
+  }
+  if (parsed.error) throw new Error(parsed.error)
+  return parsed.ops ?? []
+}
+
+// Small representative fixture so the picker UI is fully clickable/
+// demoable in a plain browser tab, without a device to actually read a
+// manifest from.
+function mockInspectComponents(packageName) {
+  return [
+    { type: 'activity', name: `${packageName}.MainActivity`, exported: true, exported_explicit: true, enabled: true },
+    { type: 'activity', name: `${packageName}.SettingsActivity`, exported: false, exported_explicit: false, enabled: true },
+    { type: 'service', name: `${packageName}.BackgroundSyncService`, exported: false, exported_explicit: true, enabled: true },
+    { type: 'receiver', name: `${packageName}.BootReceiver`, exported: true, exported_explicit: true, enabled: true },
+    { type: 'provider', name: `${packageName}.FileProvider`, exported: false, exported_explicit: true, enabled: true },
+  ]
+}
+
+function mockInspectAppops() {
+  return [
+    { op: 'android:coarse_location', label: 'Coarse location', category: 'Location', active: true },
+    { op: 'android:fine_location', label: 'Fine location', category: 'Location', active: false },
+    { op: 'android:camera', label: 'Camera', category: 'Camera & Mic', active: false },
+    { op: 'android:get_usage_stats', label: 'Get usage stats', category: 'Usage & Background', active: true },
+    { op: 'android:system_alert_window', label: 'Draw over other apps', category: 'UI & Windows', active: false },
+  ]
+}

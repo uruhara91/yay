@@ -55,6 +55,33 @@ bool looks_like_valid_identifier(std::string_view s) noexcept {
     return true;
 }
 
+// Same shape as looks_like_valid_identifier, but with ':' additionally
+// allowed — every real AppOpsManager op string constant (OPSTR_*, e.g.
+// "android:coarse_location", "android:get_usage_stats") is namespaced with
+// a colon, so a validator that rejects it would make every one of AOSP's
+// own documented op names "malformed". Package/component names never
+// legitimately contain a colon, so looks_like_valid_identifier deliberately
+// stays colon-free for those; this is intentionally a separate function
+// rather than a shared one with a "allow_colon" flag, so each call site's
+// intent is unambiguous at the call site itself.
+[[nodiscard]]
+bool looks_like_valid_op_name(std::string_view s) noexcept {
+    if (s.empty()) return false;
+    for (char c : s) {
+        const bool ok =
+            (c >= 'a' && c <= 'z') ||
+            (c >= 'A' && c <= 'Z') ||
+            (c >= '0' && c <= '9') ||
+            c == '.' || c == '_' || c == '$' || c == ':';
+        if (!ok) return false;
+    }
+    if (s.front() == '.' || s.back() == '.') return false;
+    if (s.front() == ':' || s.back() == ':') return false;
+    if (s.find("..") != std::string_view::npos) return false;
+    if (s.find("::") != std::string_view::npos) return false;
+    return true;
+}
+
 } // namespace
 
 static void apply_components(const Json& cfg, RulesResult& res, bool dry_run) {
@@ -195,7 +222,7 @@ static void apply_appops(const Json& cfg, RulesResult& res, bool dry_run) {
             op = std::to_string(op_value);
         } else if (entry.contains("op") && entry["op"].is_string()) {
             op = entry["op"].get<std::string>();
-            if (!looks_like_valid_identifier(op)) {
+            if (!looks_like_valid_op_name(op)) {
                 Logger::warn("rules: skipping malformed appops op for " + pkg);
                 ++skipped_invalid;
                 continue;

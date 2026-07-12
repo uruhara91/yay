@@ -197,10 +197,15 @@ bool validate_games_array(const Json& arr, std::string* error_out) noexcept
             }
         }
 
-        if (entry.contains("downscale") && !entry["downscale"].is_number()) {
-            return set_error(error_out,
-                "games[" + std::to_string(index) +
-                "].downscale present but not a number");
+        if (entry.contains("downscale") && !entry["downscale"].is_null()) {
+            bool ok = entry["downscale"].is_number()
+                || (entry["downscale"].is_string()
+                    && entry["downscale"].get<std::string>() == "disable");
+            if (!ok) {
+                return set_error(error_out,
+                    "games[" + std::to_string(index) +
+                    "].downscale present but not a number or \"disable\"");
+            }
         }
 
         if (entry.contains("log_dirs")) {

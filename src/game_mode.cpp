@@ -3,6 +3,7 @@
 #include "logger.h"
 #include <dirent.h>
 #include <sys/stat.h>
+#include <cmath>
 #include <cstring>
 #include <string>
 #include <cstdio>
@@ -200,25 +201,67 @@ GameResult apply_game_mode(const Json& cfg) {
 
         // === DOWNSCALE via Android GameManager API (API 31+) ===
         // cmd game downscale <factor> <package>
-        // factor: 0.0–1.0 (1.0 = native res). Applied system-side, game unaware.
-        // exit=255 typically means `cmd game` is not available on this ROM/API
-        // level — not a hard failure worth retrying. We log stdout so the
-        // exact Android error message appears in run.log for diagnosis.
-        if (game.contains("downscale") && game["downscale"].is_number()) {
-            double factor = game["downscale"].get<double>();
-            if (factor > 0.0 && factor <= 1.0) {
-                char fs[16];
-                // %g strips trailing zeros: 0.7 -> "0.7", 0.65 -> "0.65",
-                // 1.0 -> "1". %.2f was wrong — Android rejects "0.70".
-                // For values in (0,1] %g never produces scientific notation,
-                // but guard anyway just in case.
-                snprintf(fs, sizeof(fs), "%g", factor);
-                if (fs[0] == '\0' || strchr(fs, 'e') != nullptr || strchr(fs, 'E') != nullptr) {
-                    Logger::warn("game_mode: skipping downscale for " + pkg +
-                                 " — could not format factor as plain decimal");
-                    res.failed++;
-                    continue;
+        // This is GameManagerShellCommand's *legacy* downscale command —
+        // superseded by `cmd game set --mode ... --downscale ...` in newer
+        // AOSP, but kept here deliberately for simplicity (see project
+        // notes): it needs no --mode argument and doesn't require the game
+        // to have declared support for a performance/battery game mode.
+        //
+        // Its accepted values are NOT an arbitrary (0.0, 1.0] range — the
+        // shell command only recognizes an exact fixed set:
+        //   0.5 | 0.6 | 0.7 | 0.8 | 0.9 | disable
+        // (see AOSP GameManagerShellCommand's onHelp / DOWNSCALE_CHANGE_IDS
+        // for the legacy command's grid — the newer `set --mode` command
+        // supports a finer 0.05 step from 0.3-0.9, but that's a different
+        // command we're intentionally not using here). Anything else is
+        // silently ignored Android-side, so we validate against this exact
+        // set client-side too rather than forwarding whatever the config
+        // file happens to contain.
+        //
+        // exit=255 typically means `cmd game` is not available on this ROM/
+        // API level — not a hard failure worth retrying. We log stdout so
+        // the exact Android error message appears in run.log for diagnosis.
+        if (game.contains("downscale") && !game["downscale"].is_null()) {
+            std::string fs;
+            bool valid = false;
+
+            if (game["downscale"].is_string()) {
+                std::string s = game["downscale"].get<std::string>();
+                if (s == "disable") {
+                    fs = s;
+                    valid = true;
+                } else {
+                    Logger::warn("game_mode: invalid downscale string for " + pkg +
+                                 " (only \"disable\" is valid as a string): " + s);
                 }
+            } else if (game["downscale"].is_number()) {
+                double factor = game["downscale"].get<double>();
+                // Exact-match against the legacy command's fixed grid,
+                // with a small epsilon since JSON floats round-trip through
+                // IEEE754 (0.7 read back can be 0.69999999999999996).
+                constexpr double kValid[] = {0.5, 0.6, 0.7, 0.8, 0.9};
+                constexpr double kEps = 1e-6;
+                for (double v : kValid) {
+                    if (std::abs(factor - v) < kEps) {
+                        char buf[16];
+                        // %g strips trailing zeros: 0.7 -> "0.7", not "0.70"
+                        // (Android's shell command rejects the latter).
+                        snprintf(buf, sizeof(buf), "%g", v);
+                        fs = buf;
+                        valid = true;
+                        break;
+                    }
+                }
+                if (!valid) {
+                    Logger::warn("game_mode: invalid downscale factor for " + pkg +
+                                 " — must be exactly one of 0.5/0.6/0.7/0.8/0.9/disable, got " +
+                                 std::to_string(factor));
+                }
+            } else {
+                Logger::warn("game_mode: downscale must be a number or \"disable\" for " + pkg);
+            }
+
+            if (valid) {
                 auto r = exec_cmd({"cmd", "game", "downscale", fs, pkg});
                 if (r.ok()) {
                     Logger::info("game_mode: " + pkg + " downscale=" + fs);
@@ -236,6 +279,8 @@ GameResult apply_game_mode(const Json& cfg) {
                                  (out.empty() ? ")" : "): " + out));
                     res.failed++;
                 }
+            } else {
+                res.failed++;
             }
         }
 

@@ -117,6 +117,13 @@
     <Modal :show="addCompModal" title="Add component rule" @close="addCompModal = false">
       <div class="px-4 py-2 space-y-3">
         <InputField v-model="newComp.package"   label="Package"   placeholder="com.example.app" />
+        <button @click="openComponentPicker" :disabled="!isValidIdentifier(newComp.package)"
+          class="w-full py-2 rounded-xl text-sm font-medium border border-outline-variant
+                 text-on-surface-variant disabled:opacity-40 active:bg-on-surface/5 transition-colors
+                 flex items-center justify-center gap-1.5">
+          <SearchIcon class="w-4 h-4" />
+          Browse components…
+        </button>
         <InputField v-model="newComp.component" label="Component" placeholder="com.example.app.SomeService" />
         <InputField v-model="newComp.note"      label="Note (optional)" placeholder="" />
         <p v-if="newComp.package && !isValidIdentifier(newComp.package)" class="text-[11px] text-error">
@@ -146,17 +153,31 @@
       </template>
     </Modal>
 
+    <ComponentPicker
+      :show="componentPickerOpen"
+      :initial-package="newComp.package"
+      @close="componentPickerOpen = false"
+      @pick="pickComponent"
+    />
+
     <!-- Add Appop modal -->
     <Modal :show="addAppopModal" title="Add appops override" @close="addAppopModal = false">
       <div class="px-4 py-2 space-y-3">
         <InputField v-model="newAppop.package" label="Package" placeholder="com.example.app" />
+        <button @click="openAppopPicker"
+          class="w-full py-2 rounded-xl text-sm font-medium border border-outline-variant
+                 text-on-surface-variant active:bg-on-surface/5 transition-colors
+                 flex items-center justify-center gap-1.5">
+          <SearchIcon class="w-4 h-4" />
+          Browse appops…
+        </button>
         <InputField v-model="newAppop.op"      label="Op (integer or name)" placeholder="40" />
         <InputField v-model="newAppop.note"    label="Note (optional)" placeholder="op 40 = GET_USAGE_STATS" />
         <p v-if="newAppop.package && !isValidIdentifier(newAppop.package)" class="text-[11px] text-error">
           ⚠ Package must be letters/digits/. _ $ only, no leading/trailing dot or "..".
         </p>
         <p v-if="newAppop.op && !isValidOp(newAppop.op)" class="text-[11px] text-error">
-          ⚠ Op must be a non-negative integer, or a name using letters/digits/. _ $ only.
+          ⚠ Op must be a non-negative integer, or a name using letters/digits/. _ $ : only (e.g. android:coarse_location).
         </p>
         <div class="grid grid-cols-2 gap-2">
           <button v-for="m in ['ignore','deny','allow','default']" :key="m"
@@ -174,6 +195,13 @@
           class="px-4 py-2 text-sm font-medium text-primary disabled:opacity-40">Add</button>
       </template>
     </Modal>
+
+    <AppopPicker
+      :show="appopPickerOpen"
+      :initial-package="newAppop.package"
+      @close="appopPickerOpen = false"
+      @pick="pickAppop"
+    />
 
     <!-- Dry-run modal -->
     <Modal :show="dryRunModal" title="Dry-run preview" @close="dryRunModal = false">
@@ -204,6 +232,8 @@ import TrashIcon      from '@/components/icons/Trash.vue'
 import EyeIcon        from '@/components/icons/Eye.vue'
 import PlayIcon       from '@/components/icons/Play.vue'
 import InputField     from '@/components/ui/InputField.vue'
+import ComponentPicker from '@/components/ui/ComponentPicker.vue'
+import AppopPicker     from '@/components/ui/AppopPicker.vue'
 
 const store        = useRulesStore()
 const tab          = ref('components')
@@ -213,6 +243,8 @@ const addAppopModal  = ref(false)
 const dryRunModal    = ref(false)
 const dryRunLoading  = ref(false)
 const dryRunOutput   = ref('')
+const componentPickerOpen = ref(false)
+const appopPickerOpen     = ref(false)
 
 const newComp  = ref({ package: '', component: '', action: 'disable', note: '' })
 const newAppop = ref({ package: '', op: '', mode: 'ignore', note: '' })
@@ -236,12 +268,20 @@ function isValidIdentifier(s) {
 }
 
 // Mirrors rules_engine.cpp's apply_appops(): op is valid if it's a
-// non-negative integer, or a string that passes looks_like_valid_identifier.
+// non-negative integer, or a string passing looks_like_valid_op_name
+// (letters/digits/. _ $ : — colon allowed here specifically because every
+// real AppOpsManager OPSTR_* constant is namespaced, e.g.
+// "android:coarse_location"; this is intentionally more permissive than
+// isValidIdentifier, which package/component fields still use).
 function isValidOp(op) {
   const s = String(op ?? '').trim()
   if (!s) return false
   if (/^\d+$/.test(s)) return true
-  return isValidIdentifier(s)
+  if (!/^[A-Za-z0-9._$:]+$/.test(s)) return false
+  if (s.startsWith('.') || s.endsWith('.')) return false
+  if (s.startsWith(':') || s.endsWith(':')) return false
+  if (s.includes('..') || s.includes('::')) return false
+  return true
 }
 
 function showToast(msg, ms = 2500) {
@@ -274,6 +314,23 @@ function confirmAddAppop() {
   if (!isValidIdentifier(newAppop.value.package) || !isValidOp(newAppop.value.op)) return
   store.addAppop(newAppop.value)
   addAppopModal.value = false
+}
+
+function openComponentPicker() {
+  componentPickerOpen.value = true
+}
+function pickComponent(c) {
+  newComp.value.component = c.name
+  componentPickerOpen.value = false
+}
+
+function openAppopPicker() {
+  appopPickerOpen.value = true
+}
+function pickAppop(op) {
+  newAppop.value.op = op.op
+  if (!newAppop.value.note) newAppop.value.note = op.label
+  appopPickerOpen.value = false
 }
 
 async function showDryRun() {

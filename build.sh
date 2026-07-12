@@ -36,7 +36,9 @@ OUT_DIR="$SCRIPT_DIR/bin"
 
 # nlohmann/json is fetched automatically by CMake (FetchContent, pinned to
 # a tagged release — see CMakeLists.txt) during the configure step below.
-# No manual download needed here anymore.
+# No manual download needed here anymore. yay_inspect additionally links
+# zlib (libz.so), which ships as part of every Android system image and
+# is provided by the NDK sysroot — no extra fetch/vendoring needed for it.
 
 # ─── CMake configure ─────────────────────────────────────────────────────────
 CMAKE_BUILD_TYPE="Release"
@@ -60,8 +62,9 @@ mkdir -p "$OUT_DIR"
 cmake --install "$BUILD_DIR"
 cp "$BUILD_DIR/yay_apply" "$OUT_DIR/yay_apply"
 cp "$BUILD_DIR/yay_watch" "$OUT_DIR/yay_watch"
+cp "$BUILD_DIR/yay_inspect" "$OUT_DIR/yay_inspect"
 
 echo ""
 echo "Build complete:"
-ls -lh "$OUT_DIR"/yay_apply "$OUT_DIR"/yay_watch
+ls -lh "$OUT_DIR"/yay_apply "$OUT_DIR"/yay_watch "$OUT_DIR"/yay_inspect
 file "$OUT_DIR"/yay_apply

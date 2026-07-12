@@ -47,9 +47,9 @@ jobs:
 
       - name: Verify binaries
         run: |
-          file bin/yay_apply bin/yay_watch
-          # Sanity: both must be ARM64, both must exist and be non-empty.
-          for bin in bin/yay_apply bin/yay_watch; do
+          file bin/yay_apply bin/yay_watch bin/yay_inspect
+          # Sanity: all three must be ARM64, all must exist and be non-empty.
+          for bin in bin/yay_apply bin/yay_watch bin/yay_inspect; do
             [ -s "$bin" ] || { echo "::error::$bin is missing or empty"; exit 1; }
             file "$bin" | grep -q "ARM aarch64" || { echo "::error::$bin is not ARM64"; exit 1; }
           done
@@ -87,7 +87,7 @@ jobs:
           cp post-fs-data.sh "$stage/"
           cp service.sh "$stage/"
 
-          chmod 755 "$stage"/bin/yay_apply "$stage"/bin/yay_watch
+          chmod 755 "$stage"/bin/yay_apply "$stage"/bin/yay_watch "$stage"/bin/yay_inspect
           chmod 755 "$stage"/customize.sh "$stage"/post-fs-data.sh "$stage"/service.sh
 
       - name: Upload artifact

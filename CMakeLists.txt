@@ -88,13 +88,27 @@ add_executable(yay_watch
     ${COMMON_SOURCES}
 )
 
+# yay_inspect: on-demand manifest/appops browser for the webui's "add
+# component" / "add appops" pickers. Separate binary rather than folded
+# into yay_apply — it pulls in zlib (for DEFLATE-compressed manifest
+# entries) and a fair amount of parsing logic that boot-time apply has no
+# use for, and it's invoked interactively/lazily rather than on every boot.
+add_executable(yay_inspect
+    src/main_inspect.cpp
+    src/zip_reader.cpp
+    src/axml_parser.cpp
+    src/logger.cpp
+    src/exec_util.cpp
+)
+
 #
 # Common compiler options
 #
 
 foreach(target
     yay_apply
-    yay_watch)
+    yay_watch
+    yay_inspect)
 
     target_compile_features(${target}
         PRIVATE
@@ -159,24 +173,16 @@ foreach(target
 
 endforeach()
 
+target_link_libraries(yay_inspect PRIVATE z)
+
 #
 # Sanitizer (Debug only)
 #
 
 foreach(target
     yay_apply
-    yay_watch)
-
-    target_compile_options(${target}
-        PRIVATE
-
-        $<$<CONFIG:Debug>:
-            -O0
-            -g3
-            -fsanitize=address
-            -fsanitize=undefined
-        >
-    )
+    yay_watch
+    yay_inspect)
 
     target_link_options(${target}
         PRIVATE
@@ -189,7 +195,7 @@ foreach(target
 endforeach()
 
 # Install
-install(TARGETS yay_apply yay_watch RUNTIME DESTINATION bin)
+install(TARGETS yay_apply yay_watch yay_inspect RUNTIME DESTINATION bin)
 
 install(CODE [[
 execute_process(
@@ -197,6 +203,9 @@ execute_process(
 )
 execute_process(
     COMMAND ${CMAKE_STRIP} --strip-all ${CMAKE_INSTALL_PREFIX}/bin/yay_watch
+)
+execute_process(
+    COMMAND ${CMAKE_STRIP} --strip-all ${CMAKE_INSTALL_PREFIX}/bin/yay_inspect
 )
 ]]
 )
