@@ -87,7 +87,11 @@ static void run_post() {
         // composer instead of falling back to GLES compositing. Read once
         // by SurfaceFlinger at its own init, so this must land before it
         // starts — hence --post, not --boot.
-        {"debug.sf.enable_hwc_vds",              "1"},
+        {"debug.sf.enable_hwc_vds",                "1"},
+        // Transsion Specific
+        {"ro.tran.hide.freezer",                   "0"},
+        {"debug.camera.enhance_screen_brightness", "0"},
+        {"debug.thermal.throttle.support",         "no"},  
     };
 
     for (auto& p : props) {
