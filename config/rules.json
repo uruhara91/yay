@@ -773,6 +773,13 @@
       "component": "androidx.work.impl.diagnostics.DiagnosticsReceiver",
       "action": "disable",
       "enabled": true
+    },
+    {
+      "package": "eu.kanade.tachiyomi.yokai",
+      "component": "androidx.work.impl.diagnostics.DiagnosticsReceiver",
+      "action": "disable",
+      "enabled": true,
+      "note": ""
     }
   ],
   "appops": [
