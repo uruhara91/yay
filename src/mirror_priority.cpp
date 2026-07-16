@@ -263,9 +263,18 @@ void run() noexcept {
         pi = __system_property_find(kAdbdPropertyName);
     }
 
-    // Prime `serial` to this property's own current serial (not the
-    // global one from the loop above) before entering the real wait loop.
-    serial = __system_property_serial(pi);
+    // Reset serial to 0 ("unknown — wake on any change") before entering
+    // the real wait loop below. We deliberately don't use
+    // __system_property_serial(pi) to prime this to the *exact* current
+    // serial — that function isn't consistently declared across NDK
+    // versions (confirmed absent from NDK 26.3.11579264's
+    // sys/system_properties.h despite being documented as available since
+    // API 26). Serial 0 works just as well here: the first
+    // __system_property_wait call below returns essentially immediately
+    // (any real property's serial is > 0), so this costs at most one
+    // extra wait/read cycle at startup — negligible, and avoids depending
+    // on a symbol not guaranteed present in every toolchain.
+    serial = 0;
 
     // If adbd is already running by the time we get here (e.g. yay_watch
     // was started/restarted while a session was already active), handle
