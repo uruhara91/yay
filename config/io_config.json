@@ -1,6 +1,0 @@
-{
-  "_comment": "yay I/O scheduler config. scheduler_preference: ordered list, first available wins.",
-  "version": 1,
-  "scheduler_preference": ["kyber", "mq-deadline", "deadline", "cfq"],
-  "read_ahead_kb": 128
-}
