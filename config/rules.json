@@ -1,0 +1,787 @@
+{
+  "_comment": "yay rules config. Set enabled:false to skip an entry without deleting it.",
+  "version": 1,
+  "components": [
+    {
+      "package": "com.android.vending",
+      "component": "com.google.android.finsky.systemcomponentupdateui.common.SystemComponentUpdateActivity",
+      "action": "disable",
+      "enabled": true,
+      "note": "Play Store system component update UI"
+    },
+    {
+      "package": "com.android.vending",
+      "component": "com.google.android.finsky.systemupdate.receivers.RebootReadinessReceiver",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.android.vending",
+      "component": "com.google.android.finsky.systemupdate.receivers.UnattendedUpdatePreparedReceiver",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.android.vending",
+      "component": "com.google.android.finsky.systemupdateactivity.SystemUpdateActivity",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.google.android.gms",
+      "component": "com.google.android.gms.ads.AdRequestBrokerService",
+      "action": "disable",
+      "enabled": true,
+      "note": "GMS ads"
+    },
+    {
+      "package": "com.google.android.gms",
+      "component": "com.google.android.gms.analytics.AnalyticsReceiver",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.google.android.gms",
+      "component": "com.google.android.gms.analytics.AnalyticsService",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.google.android.gms",
+      "component": "com.google.android.gms.analytics.AnalyticsTaskService",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.google.android.gms",
+      "component": "com.google.android.gms.analytics.internal.PlayLogReportingService",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.google.android.gms",
+      "component": "com.google.android.gms.analytics.service.AnalyticsService",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.google.android.gms",
+      "component": "com.google.android.gms.measurement.AppMeasurementJobService",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.google.android.gms",
+      "component": "com.google.android.gms.measurement.AppMeasurementReceiver",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.google.android.gms",
+      "component": "com.google.android.gms.measurement.AppMeasurementService",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.google.android.gms",
+      "component": "com.google.android.gms.measurement.PackageMeasurementReceiver",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.google.android.gms",
+      "component": "com.google.android.gms.measurement.PackageMeasurementService",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.google.android.gms",
+      "component": "com.google.android.gms.measurement.PackageMeasurementTaskService",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.google.android.gms",
+      "component": "com.google.android.gms.measurement.service.MeasurementBrokerService",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.google.android.gms",
+      "component": "com.google.android.gms.update.OtaSuggestionActivity",
+      "action": "disable",
+      "enabled": true,
+      "note": "GMS OTA"
+    },
+    {
+      "package": "com.google.android.gms",
+      "component": "com.google.android.gms.update.SystemUpdateActivity",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.google.android.gms",
+      "component": "com.google.android.gms.update.SystemUpdateGcmTaskService",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.google.android.gms",
+      "component": "com.google.android.gms.update.SystemUpdatePersistentListenerService",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.google.android.gms",
+      "component": "com.google.android.gms.update.SystemUpdateService",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.google.android.gms",
+      "component": "com.google.android.gms.update.UpdateFromSdCardActivity",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.google.android.gms",
+      "component": "com.google.android.gms.update.UpdateFromSdCardService",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.google.android.gms",
+      "component": "com.google.android.gms.update.phone.PopupDialog",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.google.android.apps.maps",
+      "component": "androidx.work.impl.diagnostics.DiagnosticsReceiver",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.google.android.apps.messaging",
+      "component": "androidx.work.impl.diagnostics.DiagnosticsReceiver",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.google.android.apps.messaging",
+      "component": "com.google.android.apps.messaging.diagnostics.ui.DiagnosticsActivity",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.google.android.apps.youtube.music",
+      "component": "androidx.work.impl.diagnostics.DiagnosticsReceiver",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.google.android.apps.youtube.music",
+      "component": "com.google.android.gms.measurement.AppMeasurementJobService",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.google.android.apps.youtube.music",
+      "component": "com.google.android.gms.measurement.AppMeasurementReceiver",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.google.android.apps.youtube.music",
+      "component": "com.google.android.gms.measurement.AppMeasurementService",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.google.android.calendar",
+      "component": "androidx.work.impl.diagnostics.DiagnosticsReceiver",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.google.android.dialer",
+      "component": "androidx.work.impl.diagnostics.DiagnosticsReceiver",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.google.android.ext.services",
+      "component": "android.ext.services.notification.Assistant",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.google.android.ext.services",
+      "component": "androidx.work.impl.diagnostics.DiagnosticsReceiver",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.google.android.gm",
+      "component": "androidx.work.impl.diagnostics.DiagnosticsReceiver",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.google.android.keep",
+      "component": "androidx.work.impl.diagnostics.DiagnosticsReceiver",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.google.android.apps.docs",
+      "component": "androidx.work.impl.diagnostics.DiagnosticsReceiver",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.google.android.youtube",
+      "component": "androidx.work.impl.diagnostics.DiagnosticsReceiver",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.google.android.youtube",
+      "component": "com.google.android.gms.measurement.AppMeasurementJobService",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.google.android.youtube",
+      "component": "com.google.android.gms.measurement.AppMeasurementReceiver",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.google.android.youtube",
+      "component": "com.google.android.gms.measurement.AppMeasurementService",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.google.android.ims",
+      "component": "androidx.work.impl.diagnostics.DiagnosticsReceiver",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.google.android.inputmethod.latin",
+      "component": "androidx.work.impl.diagnostics.DiagnosticsReceiver",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.transsion.XOSLauncher",
+      "component": "com.google.android.gms.analytics.AnalyticsJobService",
+      "action": "disable",
+      "enabled": true,
+      "note": "XOS analytics"
+    },
+    {
+      "package": "com.transsion.XOSLauncher",
+      "component": "com.google.android.gms.analytics.AnalyticsReceiver",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.transsion.XOSLauncher",
+      "component": "com.google.android.gms.analytics.AnalyticsService",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.transsion.XOSLauncher",
+      "component": "com.google.android.gms.measurement.AppMeasurementInstallReferrerReceiver",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.transsion.XOSLauncher",
+      "component": "com.google.android.gms.measurement.AppMeasurementJobService",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.transsion.XOSLauncher",
+      "component": "com.google.android.gms.measurement.AppMeasurementReceiver",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.transsion.XOSLauncher",
+      "component": "com.google.android.gms.measurement.AppMeasurementService",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.transsion.XOSLauncher",
+      "component": "com.google.firebase.messaging.FirebaseMessagingService",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.transsion.XOSLauncher",
+      "component": "com.lzy.okserver.download.DownloadService",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.transsion.XOSLauncher",
+      "component": "com.scene.zeroscreen.activity.AuthorActivity",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.transsion.XOSLauncher",
+      "component": "com.scene.zeroscreen.overlay.service.OverlayScreenService",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.transsion.XOSLauncher",
+      "component": "com.transsion.push.broadcast.FCMMessageReceiver",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.transsion.XOSLauncher",
+      "component": "com.transsion.push.broadcast.HandlerBroadcastReceiver",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.transsion.XOSLauncher",
+      "component": "com.transsion.pushui.activity.PushActivity",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.transsion.XOSLauncher",
+      "component": "com.transsion.theme.common.XThemeMain",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.transsion.XOSLauncher",
+      "component": "com.transsion.theme.theme.model.ThemesUsingProvider",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.transsion.XOSLauncher",
+      "component": "com.transsion.theme.theme.view.DiyThemeOnlineDetails",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.transsion.XOSLauncher",
+      "component": "com.transsion.theme.theme.view.ThemeOnlineDetailActivity",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.transsion.XOSLauncher",
+      "component": "com.transsion.theme.theme.view.ThemeTopicDetailActivity",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.transsion.XOSLauncher",
+      "component": "com.transsion.xlauncher.base.WebViewActivity",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.transsion.XOSLauncher",
+      "component": "com.transsion.xlauncher.popup.NotificationListener",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.transsion.applock",
+      "component": "com.google.android.gms.measurement.AppMeasurementJobService",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.transsion.applock",
+      "component": "com.google.android.gms.measurement.AppMeasurementReceiver",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.transsion.applock",
+      "component": "com.google.android.gms.measurement.AppMeasurementService",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.transsion.applock",
+      "component": "com.google.firebase.iid.FirebaseInstanceIdReceiver",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.transsion.applock",
+      "component": "com.google.firebase.provider.FirebaseInitProvider",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.transsion.applock",
+      "component": "com.transsion.applock.activity.AdSettingActivity",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.transsion.dualapp",
+      "component": "com.hoffnung.tpms_sdk.InitProvider",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.transsion.smartpanel",
+      "component": "com.google.android.gms.common.api.GoogleApiActivity",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.transsion.smartpanel",
+      "component": "com.google.android.gms.measurement.AppMeasurementInstallReferrerReceiver",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.transsion.smartpanel",
+      "component": "com.google.android.gms.measurement.AppMeasurementJobService",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.transsion.smartpanel",
+      "component": "com.google.android.gms.measurement.AppMeasurementReceiver",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.transsion.smartpanel",
+      "component": "com.google.android.gms.measurement.AppMeasurementService",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.transsion.smartpanel",
+      "component": "com.google.firebase.iid.FirebaseInstanceIdReceiver",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.transsion.smartpanel",
+      "component": "com.google.firebase.iid.FirebaseInstanceIdService",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.transsion.smartpanel",
+      "component": "com.google.firebase.provider.FirebaseInitProvider",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.transsion.videocallenhancer",
+      "component": "com.google.android.gms.measurement.AppMeasurementInstallReferrerReceiver",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.transsion.videocallenhancer",
+      "component": "com.google.android.gms.measurement.AppMeasurementJobService",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.transsion.videocallenhancer",
+      "component": "com.google.android.gms.measurement.AppMeasurementReceiver",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.transsion.videocallenhancer",
+      "component": "com.google.android.gms.measurement.AppMeasurementService",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.transsion.videocallenhancer",
+      "component": "com.google.firebase.iid.FirebaseInstanceIdReceiver",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.transsion.videocallenhancer",
+      "component": "com.google.firebase.provider.FirebaseInitProvider",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.hoffnung",
+      "component": "com.transsion.aibox.service.AiBoxService",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.sh.smart.caller",
+      "component": "androidx.work.impl.diagnostics.DiagnosticsReceiver",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.sh.smart.caller",
+      "component": "com.android.dialer.simulator.impl.SimulatorConnectionService",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.sh.smart.caller",
+      "component": "com.hoffnung.tpms_sdk.InitProvider",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.sh.smart.caller",
+      "component": "tech.palm.cloudsdk.CloudSdkInitProvider",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.facebook.lite",
+      "component": "com.facebook.analytics2.logger.legacy.uploader.AlarmBasedUploadService",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.facebook.lite",
+      "component": "com.facebook.analytics2.logger.legacy.uploader.Analytics2UploadService",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.facebook.lite",
+      "component": "com.facebook.analytics2.logger.legacy.uploader.HighPriUploadRetryReceiver",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.facebook.lite",
+      "component": "com.facebook.analytics2.logger.legacy.uploader.LollipopUploadService",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.facebook.lite",
+      "component": "com.facebook.analytics2.logger.service.LollipopUploadSafeService",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.facebook.lite",
+      "component": "com.facebook.analyticslite.memory.MemoryDumpUploadService",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.instagram.lite",
+      "component": "com.facebook.analytics2.logger.legacy.uploader.AlarmBasedUploadService",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.instagram.lite",
+      "component": "com.facebook.analytics2.logger.legacy.uploader.Analytics2UploadService",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.instagram.lite",
+      "component": "com.facebook.analytics2.logger.legacy.uploader.HighPriUploadRetryReceiver",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.instagram.lite",
+      "component": "com.facebook.analytics2.logger.legacy.uploader.LollipopUploadService",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.instagram.lite",
+      "component": "com.facebook.analytics2.logger.service.LollipopUploadSafeService",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.instagram.lite",
+      "component": "com.facebook.analyticslite.memory.MemoryDumpUploadService",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.discord",
+      "component": "androidx.work.impl.diagnostics.DiagnosticsReceiver",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.discord",
+      "component": "com.google.android.gms.analytics.AnalyticsJobService",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.discord",
+      "component": "com.google.android.gms.analytics.AnalyticsReceiver",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.discord",
+      "component": "com.google.android.gms.analytics.AnalyticsService",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.whatsapp",
+      "component": "androidx.work.impl.diagnostics.DiagnosticsReceiver",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.shazam.android",
+      "component": "androidx.work.impl.diagnostics.DiagnosticsReceiver",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.shazam.android",
+      "component": "com.google.android.gms.measurement.AppMeasurementJobService",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.shazam.android",
+      "component": "com.google.android.gms.measurement.AppMeasurementReceiver",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.shazam.android",
+      "component": "com.google.android.gms.measurement.AppMeasurementService",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.shopee.id",
+      "component": "androidx.work.impl.diagnostics.DiagnosticsReceiver",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.shopee.id",
+      "component": "com.google.android.gms.measurement.AppMeasurementJobService",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.shopee.id",
+      "component": "com.google.android.gms.measurement.AppMeasurementReceiver",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.shopee.id",
+      "component": "com.google.android.gms.measurement.AppMeasurementService",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.shopeepay.id",
+      "component": "androidx.work.impl.diagnostics.DiagnosticsReceiver",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.shopeepay.id",
+      "component": "com.google.android.gms.measurement.AppMeasurementJobService",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.shopeepay.id",
+      "component": "com.google.android.gms.measurement.AppMeasurementReceiver",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.shopeepay.id",
+      "component": "com.google.android.gms.measurement.AppMeasurementService",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "ch.protonvpn.android",
+      "component": "androidx.work.impl.diagnostics.DiagnosticsReceiver",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "com.franco.kernel",
+      "component": "androidx.work.impl.diagnostics.DiagnosticsReceiver",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "app.komikku",
+      "component": "androidx.work.impl.diagnostics.DiagnosticsReceiver",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "app.komikku",
+      "component": "com.google.android.gms.measurement.AppMeasurementJobService",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "app.komikku",
+      "component": "com.google.android.gms.measurement.AppMeasurementReceiver",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "app.komikku",
+      "component": "com.google.android.gms.measurement.AppMeasurementService",
+      "action": "disable",
+      "enabled": true
+    },
+    {
+      "package": "in.krosbits.musicolet",
+      "component": "androidx.work.impl.diagnostics.DiagnosticsReceiver",
+      "action": "disable",
+      "enabled": true
+    }
+  ],
+  "appops": [
+    {
+      "package": "com.transsion.microintelligence",
+      "op": 63,
+      "mode": "ignore",
+      "enabled": false,
+      "note": "op 63 = RUN_IN_BACKGROUND"
+    }
+  ]
+}

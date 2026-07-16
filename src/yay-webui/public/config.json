@@ -1,0 +1,13 @@
+{
+  "modId": "yay",
+  "title": "yay",
+  "icon": "icon.svg",
+  "exitConfirm": false,
+  "windowResize": true,
+  "backHandler": true,
+  "backInterceptor": "javascript",
+  "pullToRefresh": false,
+  "autoStatusBarsStyle": true,
+  "killShellWhenBackground": true,
+  "contentSecurityPolicy": "default-src 'self' https://mui.kernelsu.org; script-src 'self'; style-src 'self' 'unsafe-inline' https://mui.kernelsu.org; img-src 'self' ksu: data:; font-src 'self' data:; connect-src 'self' https://mui.kernelsu.org"
+}
