@@ -81,17 +81,43 @@ bool read_first_line(const std::string& path, std::string* out) noexcept {
 //   CLASSPATH=/data/local/tmp/scrcpy-server.jar app_process / com.genymobile.scrcpy.Server ...
 // CLASSPATH is set as an *environment variable*, not a positional argv
 // entry — so /proc/[pid]/cmdline never actually contains the literal
-// string "scrcpy-server" at all (an earlier version of this matcher
-// assumed it would, which would have silently never matched the real
-// process). The one thing guaranteed to appear in argv is the Java main
-// class name, since app_process takes it as a plain positional argument.
-// "scrcpy-server"/"scrcpy_server" are kept as a secondary check in case
-// some fork/variant does pass the jar name on the command line too.
+// string "scrcpy-server" at all for the Server process itself. The one
+// thing guaranteed to appear in its argv is the Java main class name,
+// since app_process takes it as a plain positional argument.
+//
+// Deliberately narrow: only matches when argv0 is app_process/
+// app_process64 AND the exact main class "com.genymobile.scrcpy.Server"
+// appears as a standalone argv token (space-bounded on both sides, since
+// read_cmdline_full joins argv with spaces). Earlier versions of this
+// matcher accepted the class-name substring anywhere in cmdline, which
+// turned out to false-match processes actually observed on-device:
+//   - "com.genymobile.scrcpy.CleanUp" (a separate helper process scrcpy
+//     spawns — rejected by the exact-token check on its own)
+//   - "/system/bin/sh -c su -c 'CLASSPATH=... app_process / com.genymobile.scrcpy.Server ...'"
+//     and the non-su variant — the *wrapper shell* that launches Server,
+//     whose single quoted argument to -c happens to contain the class
+//     name as a token too. The argv0 check is what rejects these: their
+//     argv0 is "sh", not "app_process"/"app_process64".
+// Since the /proc scan stops at the first match found (and /proc's
+// iteration order isn't guaranteed), the looser matcher could end up
+// reniceing the wrapper shell or CleanUp instead of the actual Server
+// process — exactly the process meant to be targeted was sometimes
+// skipped entirely.
 [[nodiscard]]
 bool cmdline_matches_scrcpy_server(const std::string& cmdline) noexcept {
-    return cmdline.find("com.genymobile.scrcpy.Server") != std::string::npos ||
-           cmdline.find("scrcpy-server") != std::string::npos ||
-           cmdline.find("scrcpy_server") != std::string::npos;
+    if (cmdline.rfind("app_process", 0) != 0) return false; // argv0 check
+
+    constexpr std::string_view kTarget = "com.genymobile.scrcpy.Server";
+    size_t pos = cmdline.find(kTarget);
+    if (pos == std::string::npos) return false;
+
+    // Token-boundary check: must be preceded and followed by a space (or
+    // string start/end) — rejects any hypothetical longer identifier that
+    // merely contains this as a substring.
+    bool left_ok = (pos == 0) || (cmdline[pos - 1] == ' ');
+    size_t end = pos + kTarget.size();
+    bool right_ok = (end == cmdline.size()) || (cmdline[end] == ' ');
+    return left_ok && right_ok;
 }
 
 // Reads the full cmdline (with NULs replaced by spaces) for matching via
